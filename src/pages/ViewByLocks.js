@@ -151,25 +151,28 @@ function ViewByLocks() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
                     Breaker Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
                     Zone
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                    Subzone
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
                     Location
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
                     Lock Key
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
                     General Breaker
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-40">
                     Last Updated
                   </th>
                 </tr>
@@ -177,18 +180,21 @@ function ViewByLocks() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredBreakers.map((breaker) => (
                   <tr key={breaker.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <Lock className="w-4 h-4 text-red-500" />
-                        <span className="font-medium text-gray-900 dark:text-white">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2 truncate">
+                        <Lock className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <span className="font-medium text-gray-900 dark:text-white truncate">
                           {breaker.name}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.zone}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                      {breaker.subzone || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.location}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -196,10 +202,10 @@ function ViewByLocks() {
                         {breaker.lock_key || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.general_breaker || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 truncate">
                       {new Date(breaker.last_updated).toLocaleString()}
                     </td>
                   </tr>

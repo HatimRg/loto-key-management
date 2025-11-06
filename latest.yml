@@ -1,0 +1,8 @@
+version: 1.7.1
+files:
+  - url: LOTO Key Management Setup 1.7.1.exe
+    sha512: PLACEHOLDER_HASH_WILL_BE_CALCULATED
+    size: 0
+path: LOTO Key Management Setup 1.7.1.exe
+sha512: PLACEHOLDER_HASH_WILL_BE_CALCULATED
+releaseDate: '2025-01-08T19:00:00.000Z'

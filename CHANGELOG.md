@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.2] - 2025-01-08
+
+### 🔧 Technical Improvements
+- **Enhanced Auto-Update Debugging**
+  - Added manual "Check for Updates" button in About/Settings page
+  - Improved update check logging with feed URL and current version display
+  - Added IPC handler for manual update checks
+  - Clears localStorage snooze when manually checking for updates
+  - Better error reporting for update failures
+
+### 🐛 Fixed
+- **Auto-Updater Configuration**
+  - Fixed missing `app-update.yml` error by configuring update feed directly in code
+  - Update checker now works correctly in packaged apps (not just installers)
+  - Fixed detection of development vs production mode
+  - Improved error handling and logging for update checks
+- Improved auto-updater visibility for testing and troubleshooting
+
+---
+
+## [1.7.1] - 2025-01-08
+
+### 🐛 Fixed
+- **Cursor Display Issue**
+  - Fixed text cursor appearing on non-text elements in tables (Personnel, View by Breakers, View by Locks)
+  - Buttons and icons now correctly show pointer cursor instead of text selection cursor
+  - Table cells retain text selection capability for actual content
+  
+- **Subzone Display in Storage Page**
+  - Fixed "No Subzone" showing instead of actual subzone names in "Locks by Zone" section
+  - Database query now properly includes subzone field for locked breakers
+  - Subzone grouping now displays correct subzone names
+
+### ⚡ Improved
+- **Table Layout & Horizontal Scroll Elimination**
+  - Removed horizontal scrolling in all table pages (Personnel, View by Breakers, View by Locks)
+  - Implemented sticky Actions column that remains visible when viewing long text
+  - Text columns now use truncation with ellipsis instead of forcing horizontal scroll
+  - Applied `table-fixed` layout with defined column widths for better responsiveness
+  - Action buttons (Edit/Delete) are always accessible without scrolling
+  - Improved mobile and narrow viewport experience
+
+### 🔧 Technical Improvements
+- Enhanced CSS rules for table interactions
+- Better cursor management across interactive elements
+- Improved table cell text handling with `truncate` utility
+
+---
+
+## [1.7.0] - 2025-01-08
+
+### 🎉 **FINAL RELEASE - Production Ready**
+
+### ✨ New Features
+- **Subzone Grouping in Storage Page**
+  - Locks by Zone section now groups locks by subzone within each zone
+  - Hierarchical display: Zone → Subzone → Lock keys
+  - Automatic handling of breakers without subzones
+  - Visual indicators for subzone grouping (▶ arrows and indentation)
+
+- **Enhanced Subzone Support**
+  - Added Subzone column in View by Locks page
+  - Better organization and filtering of locked breakers by subzone
+
+### ⚡ Improved
+- **Increased File Size Limits**
+  - Personnel PDFs: Now supports up to **5MB** (previously limited)
+  - CVs: Increased to **10MB** (was 5MB)
+  - Electrical Plans: Increased to **15MB** (was 10MB)
+  - Better file size validation with clear error messages
+
+- **Unified PDF Viewer**
+  - About Me page now uses the same modal PDF viewer as Personnel and Electrical Plans pages
+  - Consistent user experience across all PDF viewing
+  - Improved download functionality in CV viewer
+  - Better handling of cloud URLs, data URLs, and local files
+
+### 🐛 Fixed
+- **CRITICAL: Delete Functionality Restored**
+  - Fixed delete operations in Personnel, Electrical Plans, and Storage (Locks) pages
+  - Properly synced deletions with cloud database (Supabase)
+  - Data now correctly deleted from both local SQLite and cloud storage
+  - Resolved issue where success messages showed but data wasn't actually deleted
+
+### 🔧 Technical Improvements
+- Fixed package.json loading in packaged apps
+- Added comprehensive error logging for debugging
+- Improved hybrid database delete operations
+- Better cloud-first dual-write deletion for all entities
+- Enhanced file size validation using centralized FILE_CONFIG
+
+---
+
 ## [1.6.15] - 2025-01-08
 
 ### 🐛 Fixed

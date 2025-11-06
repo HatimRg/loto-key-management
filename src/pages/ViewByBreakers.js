@@ -640,34 +640,34 @@ function ViewByBreakers() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Zone</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Subzone</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">State</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Lock Key</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">General Breaker</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Zone</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Subzone</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-28">State</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Lock Key</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">General Breaker</th>
                   {canEdit && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24 sticky right-0 bg-gray-50 dark:bg-gray-700">Actions</th>
                   )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredBreakers.map((breaker) => (
                   <tr key={breaker.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white truncate">
                       {breaker.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.zone}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.subzone || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.location === 'Local Technique' && breaker.special_use 
                         ? `Locale ${breaker.special_use}` 
                         : breaker.location}
@@ -677,14 +677,14 @@ function ViewByBreakers() {
                         {getStateIcon(breaker.state)} {breaker.state}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.lock_key || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {breaker.general_breaker || '-'}
                     </td>
                     {canEdit && (
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 sticky right-0 bg-white dark:bg-gray-800">
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={isOnline ? () => handleEdit(breaker) : undefined}

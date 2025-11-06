@@ -123,7 +123,10 @@ export const SYNC_CONFIG = {
 
 // File Upload Configuration
 export const FILE_CONFIG = {
-  maxFileSize: 10 * 1024 * 1024, // 10MB
+  maxFileSize: 10 * 1024 * 1024, // 10MB (general)
+  maxPersonnelPdfSize: 5 * 1024 * 1024, // 5MB for personnel PDFs
+  maxCvSize: 10 * 1024 * 1024, // 10MB for CVs
+  maxPlanSize: 15 * 1024 * 1024, // 15MB for electrical plans
   allowedPdfTypes: ['application/pdf'],
   allowedImageTypes: ['image/jpeg', 'image/png', 'image/jpg'],
   allowedCsvTypes: ['text/csv', 'application/vnd.ms-excel'],

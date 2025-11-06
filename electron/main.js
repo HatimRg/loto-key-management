@@ -18,7 +18,7 @@ try {
   } catch (err2) {
     // Ultimate fallback
     packageJson = {
-      version: '1.6.19',
+      version: '1.7.2',
       description: 'LOTO Key Management System'
     };
   }
@@ -66,8 +66,17 @@ autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.logger = require('electron-log');
 autoUpdater.logger.transports.file.level = 'info';
 
+// Set update feed URL directly (so we don't need app-update.yml)
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'HatimRg',
+  repo: 'loto-key-management',
+  releaseType: 'release'
+});
+
 console.log('🔄 Auto-updater configured');
 console.log('📦 Current version:', packageJson.version);
+console.log('🔗 Update repo: github.com/HatimRg/loto-key-management');
 
 let mainWindow;
 let db;
@@ -390,6 +399,24 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 // IPC handlers for update actions
+ipcMain.on('check-for-updates', () => {
+  console.log('🔍 Manual update check requested');
+  console.log('📦 Current version:', app.getVersion());
+  console.log('📡 Checking: github.com/HatimRg/loto-key-management/releases');
+  
+  autoUpdater.checkForUpdates()
+    .then(result => {
+      console.log('✅ Manual update check completed:', result);
+    })
+    .catch(err => {
+      console.log('❌ Manual update check error:', err);
+      console.log('Error message:', err?.message || 'No error message');
+      if (mainWindow) {
+        mainWindow.webContents.send('update-error', err?.message || err.toString());
+      }
+    });
+});
+
 ipcMain.on('download-update', () => {
   console.log('⬇️ User requested update download');
   autoUpdater.downloadUpdate();
@@ -426,13 +453,31 @@ app.whenReady().then(() => {
 
   // Check for updates after 5 seconds (give app time to fully load)
   setTimeout(() => {
-    if (process.env.NODE_ENV !== 'development') {
+    // Only skip in dev mode (when ELECTRON_START_URL is set)
+    const isDev = process.env.ELECTRON_START_URL || !app.isPackaged;
+    
+    if (!isDev) {
       console.log('🔍 Checking for updates...');
-      autoUpdater.checkForUpdates().catch(err => {
-        console.log('❌ Error checking for updates:', err);
-      });
+      console.log('📦 Current version:', app.getVersion());
+      console.log('🏗️ App is packaged:', app.isPackaged);
+      console.log('📡 Checking: github.com/HatimRg/loto-key-management/releases');
+      
+      autoUpdater.checkForUpdates()
+        .then(result => {
+          console.log('✅ Update check completed:', result);
+        })
+        .catch(err => {
+          console.log('❌ Error checking for updates:', err);
+          console.log('Error message:', err?.message || 'No error message');
+          console.log('Error stack:', err?.stack || 'No stack trace');
+          if (mainWindow) {
+            mainWindow.webContents.send('update-error', err?.message || 'Update check failed');
+          }
+        });
     } else {
       console.log('⚠️ Update check skipped (development mode)');
+      console.log('ELECTRON_START_URL:', process.env.ELECTRON_START_URL);
+      console.log('app.isPackaged:', app.isPackaged);
     }
   }, 5000);
 

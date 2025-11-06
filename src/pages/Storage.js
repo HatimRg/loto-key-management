@@ -15,37 +15,65 @@ const StatCard = memo(({ title, value, subtitle, color }) => (
 ));
 StatCard.displayName = 'StatCard';
 
-// Memoized ZoneCard component
-const ZoneCard = memo(({ zoneData }) => (
-  <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-lg transition-all duration-300">
-    <div className="flex items-center justify-between mb-3">
-      <div className="flex items-center space-x-3">
-        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-        <span className="text-lg font-medium text-gray-900 dark:text-white">
-          {zoneData.zone}
-        </span>
-      </div>
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-gray-500 dark:text-gray-400">Locks in Use:</span>
-        <span className="px-3 py-1 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-full text-sm font-bold transition-all duration-300">
-          {zoneData.locksInUse}
-        </span>
-      </div>
-    </div>
-    
-    {/* Show breakers in this zone */}
-    <div className="mt-2 ml-6 space-y-1">
-      {zoneData.breakers.map((breaker, idx) => (
-        <div key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-center space-x-2">
-          <span className="text-gray-400">→</span>
-          <span className="font-medium">{breaker.name}</span>
-          <span className="text-gray-500">({breaker.location})</span>
-          <span className="text-yellow-600 dark:text-yellow-400">🔑 {breaker.lock_key}</span>
+// Memoized ZoneCard component with subzone grouping
+const ZoneCard = memo(({ zoneData }) => {
+  // Group breakers by subzone
+  const breakersBySubzone = useMemo(() => {
+    const grouped = {};
+    zoneData.breakers.forEach(breaker => {
+      const subzone = breaker.subzone || 'No Subzone';
+      if (!grouped[subzone]) {
+        grouped[subzone] = [];
+      }
+      grouped[subzone].push(breaker);
+    });
+    return grouped;
+  }, [zoneData.breakers]);
+
+  return (
+    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-lg transition-all duration-300">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-3">
+          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+          <span className="text-lg font-medium text-gray-900 dark:text-white">
+            {zoneData.zone}
+          </span>
         </div>
-      ))}
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">Locks in Use:</span>
+          <span className="px-3 py-1 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-full text-sm font-bold transition-all duration-300">
+            {zoneData.locksInUse}
+          </span>
+        </div>
+      </div>
+      
+      {/* Show breakers grouped by subzone */}
+      <div className="mt-2 ml-4 space-y-3">
+        {Object.entries(breakersBySubzone).map(([subzone, breakers]) => (
+          <div key={subzone} className="space-y-1">
+            {/* Subzone header */}
+            <div className="flex items-center space-x-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+              <span className="text-blue-400">▶</span>
+              <span>{subzone}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">({breakers.length})</span>
+            </div>
+            {/* Breakers in this subzone */}
+            <div className="ml-4 space-y-1">
+              {breakers.map((breaker, idx) => (
+                <div key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-center space-x-2">
+                  <span className="text-gray-400">--</span>
+                  <span className="font-medium">{breaker.name}</span>
+                  <span className="text-gray-500">({breaker.location})</span>
+                  <span className="text-yellow-600 dark:text-yellow-400">🔑 {breaker.lock_key}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-));
+  );
+});
 ZoneCard.displayName = 'ZoneCard';
 
 function Storage() {

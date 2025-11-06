@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Linkedin, Mail, FileText, Upload, Save, Edit2, X, Download, Eye } from 'lucide-react';
+import { User, Linkedin, Mail, FileText, Upload, Save, Edit2, X, Download, Eye, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
-import { APP_CONFIG } from '../utils/constants';
+import { APP_CONFIG, FILE_CONFIG } from '../utils/constants';
 import packageJson from '../../package.json';
 import db from '../utils/database';
 import { saveFileDualWrite } from '../utils/fileSync';
@@ -38,6 +38,9 @@ function AboutMe() {
     support_phone: ''
   });
   const [newCVName, setNewCVName] = useState('');
+  const [showPDFViewer, setShowPDFViewer] = useState(false);
+  const [viewingCV, setViewingCV] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadProfileData();
@@ -262,9 +265,9 @@ function AboutMe() {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('CV must be less than 5MB', 'error');
+    // Validate file size (max 10MB)
+    if (file.size > FILE_CONFIG.maxCvSize) {
+      showToast('CV must be less than 10MB', 'error');
       return;
     }
 
@@ -363,39 +366,60 @@ function AboutMe() {
   };
 
   const handleViewCV = async (cv) => {
-    // Check if it's a cloud URL (Supabase)
-    const isCloudUrl = cv.path && (
-      cv.path.startsWith('http://') || 
-      cv.path.startsWith('https://') ||
-      cv.cloudUrl
-    );
+    console.log('📄 Attempting to view CV:', cv.displayName);
     
-    // Check if it's a data URL
-    const isDataUrl = cv.path && cv.path.startsWith('data:');
-    
-    // Cloud URLs and data URLs should open in browser
-    if (isCloudUrl || isDataUrl) {
-      console.log('📄 Opening CV in browser:', cv.path);
-      window.open(cv.path, '_blank');
+    if (!cv.path) {
+      console.error('❌ No CV path provided');
+      showToast('No CV available', 'error');
       return;
     }
-    
-    // Local file path - use Electron if available
-    if (ipcRenderer && cv.path) {
-      try {
-        console.log('📄 Opening local CV file:', cv.path);
-        const result = await ipcRenderer.invoke('open-file', cv.path);
-        if (!result.success) {
-          showToast(`Could not open file: ${result.error}`, 'error');
-        }
-      } catch (error) {
-        console.error('Error opening file:', error);
-        showToast('Error opening file', 'error');
+
+    try {
+      // Check if it's a Supabase cloud URL (https://)
+      if (cv.path.startsWith('http://') || cv.path.startsWith('https://')) {
+        console.log('☁️ Cloud URL detected - opening directly:', cv.path);
+        setViewingCV({ url: cv.path, name: cv.displayName });
+        setShowPDFViewer(true);
+        return;
       }
-    } else {
-      // Fallback: try to open as link
-      console.log('📄 Opening CV as link:', cv.path);
-      window.open(cv.path, '_blank');
+      
+      // Check if it's a data URL (browser mode)
+      if (cv.path.startsWith('data:')) {
+        console.log('🌐 Browser mode - using data URL');
+        setViewingCV({ url: cv.path, name: cv.displayName });
+        setShowPDFViewer(true);
+        return;
+      }
+      
+      // Local file path - read via IPC (Electron)
+      if (ipcRenderer) {
+        console.log('💻 Electron mode - reading file via IPC:', cv.path);
+        const result = await ipcRenderer.invoke('read-file', cv.path);
+        console.log('📥 IPC result:', result?.success ? 'Success' : 'Failed');
+        if (result.success) {
+          console.log('✅ File read successfully, size:', result.data?.length || 0);
+          // Convert base64 to blob (browser-compatible)
+          const binaryString = atob(result.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          console.log('✅ PDF blob created, opening viewer');
+          setViewingCV({ url, name: cv.displayName });
+          setShowPDFViewer(true);
+        } else {
+          console.error('❌ Failed to read file:', result.error);
+          showToast(`Could not open file: ${result.error || 'File not found'}`, 'error');
+        }
+      } else {
+        console.error('❌ No IPC available and not a cloud/data URL');
+        showToast('PDF viewing not available', 'error');
+      }
+    } catch (error) {
+      console.error('❌ Exception viewing CV:', error);
+      showToast(`Error loading CV: ${error.message}`, 'error');
     }
   };
 
@@ -799,7 +823,85 @@ function AboutMe() {
             <p className="text-sm text-gray-600 dark:text-gray-400">Database</p>
           </div>
         </div>
+        
+        {/* Manual Update Check Button (for testing) */}
+        {ipcRenderer && (
+          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <button
+              onClick={() => {
+                setCheckingUpdate(true);
+                console.log('🔍 Manual update check triggered');
+                showToast('Checking for updates...', 'info');
+                // Clear localStorage snooze if exists
+                localStorage.removeItem('update_snooze_until');
+                // Force update check via IPC
+                ipcRenderer.send('check-for-updates');
+                setTimeout(() => setCheckingUpdate(false), 3000);
+              }}
+              disabled={checkingUpdate}
+              className={`w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
+                checkingUpdate
+                  ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
+              <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+            </button>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+              Current version: {packageJson.version} • Open DevTools (F12) to see logs
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* PDF Viewer Modal */}
+      {showPDFViewer && viewingCV && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                <FileText className="w-5 h-5" />
+                <span>CV: {viewingCV.name}</span>
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    const cv = profileData.cvFiles.find(c => c.displayName === viewingCV.name);
+                    if (cv) handleDownloadCV(cv);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPDFViewer(false);
+                    if (viewingCV.url && !viewingCV.url.startsWith('data:') && !viewingCV.url.startsWith('http')) {
+                      URL.revokeObjectURL(viewingCV.url);
+                    }
+                    setViewingCV(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
+            </div>
+            
+            {/* PDF Content */}
+            <div className="flex-1 overflow-hidden">
+              <iframe
+                src={viewingCV.url}
+                className="w-full h-full"
+                title="CV Viewer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -422,8 +422,8 @@ export const db = {
     if (!useElectron) {
       result = await localDB.delete('locks', id);
     } else {
-      // Use hybrid DB for cloud-first dual-write
-      result = await this.run('DELETE FROM locks WHERE id = ?', [id]);
+      // Use hybrid DB for cloud-first dual-write deletion
+      result = await hybridDB.deleteLock(id);
     }
 
     // Trigger auto-sync
@@ -638,8 +638,8 @@ export const db = {
     if (!useElectron) {
       result = await localDB.delete('personnel', id);
     } else {
-      // Use hybrid DB for cloud-first dual-write
-      result = await this.run('DELETE FROM personnel WHERE id = ?', [id]);
+      // Use hybrid DB for cloud-first dual-write deletion
+      result = await hybridDB.deletePersonnel(id);
     }
 
     // Trigger auto-sync
@@ -702,8 +702,8 @@ export const db = {
     if (!useElectron) {
       result = await localDB.delete('plans', id);
     } else {
-      // Use hybrid DB for cloud-first dual-write
-      result = await this.run('DELETE FROM plans WHERE id = ?', [id]);
+      // Use hybrid DB for cloud-first dual-write deletion
+      result = await hybridDB.deletePlan(id);
     }
 
     // Trigger auto-sync
@@ -968,7 +968,8 @@ export const db = {
           zoneStats[zone].breakers.push({
             name: breaker.name,
             location: breaker.location,
-            lock_key: breaker.lock_key
+            lock_key: breaker.lock_key,
+            subzone: breaker.subzone
           });
         }
       });

@@ -9,6 +9,7 @@ import db from '../utils/database';
 import { exportToExcel, parseExcelFile, validatePersonnelExcel } from '../utils/excelHelper';
 import { generatePersonnelTemplate, exportFailedRows } from '../utils/importTemplates';
 import { saveFileDualWrite } from '../utils/fileSync';
+import { FILE_CONFIG } from '../utils/constants';
 
 const { ipcRenderer } = window;
 
@@ -277,6 +278,12 @@ function Personnel() {
 
     if (file.type !== 'application/pdf') {
       showToast('Please select a PDF file', 'error');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > FILE_CONFIG.maxPersonnelPdfSize) {
+      showToast('PDF file must be less than 5MB', 'error');
       return;
     }
 
@@ -606,31 +613,31 @@ function Personnel() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID Card</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Company</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Habilitation / Certificate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/5">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">ID Card</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/5">Company</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/4">Habilitation / Certificate</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24 sticky right-0 bg-gray-50 dark:bg-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredPersonnel.map((person) => (
                   <tr key={person.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-gray-900 dark:text-white">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-gray-900 dark:text-white truncate">
                         {person.name} {person.lastname}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {person.id_card}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
                       {person.company || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4">
                       {person.pdf_path ? (
                         <button
                           onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
@@ -645,7 +652,7 @@ function Personnel() {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-6 py-4 sticky right-0 bg-white dark:bg-gray-800">
                       <div className="flex items-center space-x-2">
                         {canEdit && (
                           <>

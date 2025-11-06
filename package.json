@@ -1,6 +1,6 @@
 {
   "name": "loto-key-management",
-  "version": "1.6.19",
+  "version": "1.7.2",
   "description": "LOTO Key Management System - Offline + Supabase Sync",
   "main": "electron/main.js",
   "homepage": "./",

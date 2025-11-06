@@ -34,7 +34,6 @@ button div:not(:has(input)):not(:has(textarea)) {
 }
 
 /* Allow text selection in specific areas - MUST come after button rules */
-table, table *, 
 input, textarea, select,
 pre, code,
 .select-text {
@@ -42,6 +41,23 @@ pre, code,
   -webkit-user-select: text !important;
   cursor: text !important;
   pointer-events: auto !important;
+}
+
+/* Table cells should allow text selection but not show text cursor on non-text elements */
+table td, table th {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Buttons, icons, and interactive elements in tables should not have text cursor */
+table button,
+table button *,
+table a,
+table svg,
+table .cursor-pointer {
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 code {

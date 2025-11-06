@@ -6,6 +6,7 @@ import Footer from '../components/Footer';
 import ConfirmDialog from '../components/ConfirmDialog';
 import db from '../utils/database';
 import { saveFileDualWrite } from '../utils/fileSync';
+import { FILE_CONFIG } from '../utils/constants';
 
 const { ipcRenderer } = window;
 
@@ -55,6 +56,12 @@ function ElectricalPlans() {
 
     if (file.type !== 'application/pdf') {
       showToast('Please select a PDF file', 'error');
+      return;
+    }
+
+    // Validate file size (max 15MB)
+    if (file.size > FILE_CONFIG.maxPlanSize) {
+      showToast('PDF file must be less than 15MB', 'error');
       return;
     }
 
