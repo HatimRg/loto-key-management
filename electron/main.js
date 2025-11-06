@@ -214,14 +214,16 @@ function createWindow() {
 
   const startUrl = process.env.ELECTRON_START_URL || 
     (app.isPackaged 
-      ? `file://${path.join(__dirname, 'index.html')}`
+      ? `file://${path.join(__dirname, '../build/index.html')}`
       : `file://${path.join(__dirname, '../build/index.html')}`);
   
   console.log('=== ELECTRON DEBUG INFO ===');
   console.log('Is Packaged:', app.isPackaged);
   console.log('__dirname:', __dirname);
   console.log('Start URL:', startUrl);
-  console.log('Index.html exists:', require('fs').existsSync(path.join(__dirname, 'index.html')));
+  console.log('Build folder path:', path.join(__dirname, '../build'));
+  console.log('Index.html path:', path.join(__dirname, '../build/index.html'));
+  console.log('Index.html exists:', require('fs').existsSync(path.join(__dirname, '../build/index.html')));
   console.log('Preload.js exists:', require('fs').existsSync(path.join(__dirname, 'preload.js')));
   console.log('===========================');
   
