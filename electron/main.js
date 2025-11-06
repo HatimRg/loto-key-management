@@ -262,8 +262,10 @@ function createWindow() {
     }
   }, 3000);
 
-  // Open DevTools to debug (temporarily enabled in production)
-  mainWindow.webContents.openDevTools();
+  // Only open DevTools in development
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
   
   // Enhanced error logging
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {

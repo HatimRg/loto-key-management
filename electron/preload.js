@@ -17,6 +17,10 @@ try {
     removeListener: (channel, func) => {
       console.log(`[Preload] IPC removeListener: ${channel}`);
       return ipcRenderer.removeListener(channel, func);
+    },
+    removeAllListeners: (channel) => {
+      console.log(`[Preload] IPC removeAllListeners: ${channel}`);
+      return ipcRenderer.removeAllListeners(channel);
     }
   });
   

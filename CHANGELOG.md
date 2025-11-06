@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.14] - 2025-01-08
+
+### 🐛 Fixed
+- **CRITICAL FIX**: Resolved IPC communication error causing app crash
+  - Added missing `removeAllListeners` method to preload IPC bridge
+  - Fixed UpdateNotification component cleanup function
+  - App now launches properly without JavaScript errors
+  - Window displays correctly on all installations
+
+### ⚡ Improved
+- Enhanced window lifecycle management
+- Better error handling for failed page loads
+- Automatic fallback window display after 3 seconds
+- Comprehensive debugging logs for troubleshooting
+
+---
+
 ## [1.6.13] - 2025-01-08 (Debug Version)
 
 ### 🐛 Fixed
