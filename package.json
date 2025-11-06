@@ -1,6 +1,6 @@
 {
   "name": "loto-key-management",
-  "version": "1.6.11",
+  "version": "1.6.12",
   "description": "LOTO Key Management System - Offline + Supabase Sync",
   "main": "electron/main.js",
   "homepage": "./",
@@ -32,9 +32,13 @@
     "files": [
       "build/**/*",
       "electron/**/*",
-      "node_modules/**/*",
+      "!electron/node_modules",
       "package.json"
     ],
+    "asarUnpack": [
+      "build/**/*"
+    ],
+    "asar": true,
     "win": {
       "target": [
         {

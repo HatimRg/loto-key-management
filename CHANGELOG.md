@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.12] - 2025-01-08
+
+### 🐛 Fixed
+- **CRITICAL FIX**: Resolved app window not appearing after installation
+  - Fixed electron-builder packaging configuration
+  - Removed problematic node_modules inclusion from files array
+  - Added asarUnpack configuration for build folder
+  - Improved path resolution for packaged app resources
+  - App now correctly loads React interface on all installations
+
+### ⚡ Improved
+- Enhanced debug logging for troubleshooting packaged apps
+- Better resource path handling in production builds
+
+---
+
 ## [1.6.9] - 2025-01-08
 
 ### 🎉 Added
