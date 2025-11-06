@@ -2,8 +2,63 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
-const packageJson = require('../package.json'); // Import for version and app name
 const { autoUpdater } = require('electron-updater');
+
+// Load package.json with fallback for packaged apps
+let packageJson;
+try {
+  packageJson = require('../package.json');
+} catch (err) {
+  // In packaged app, load from resources
+  try {
+    const packagePath = app.isPackaged 
+      ? path.join(process.resourcesPath, 'app', 'package.json')
+      : path.join(__dirname, '../package.json');
+    packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  } catch (err2) {
+    // Ultimate fallback
+    packageJson = {
+      version: '1.6.19',
+      description: 'LOTO Key Management System'
+    };
+  }
+}
+
+// Ensure build object exists (electron-builder strips it from packaged package.json)
+if (!packageJson.build) {
+  packageJson.build = { productName: 'LOTO Key Management' };
+}
+
+// File logging for debugging
+const logFile = path.join(app.getPath('userData'), 'app-debug.log');
+const log = (message) => {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  console.log(message);
+  try {
+    fs.appendFileSync(logFile, logMessage);
+  } catch (err) {
+    console.error('Failed to write log:', err);
+  }
+};
+
+log('========== APP STARTING ==========');
+log('Log file: ' + logFile);
+log('Package version: ' + packageJson.version);
+log('Product name: ' + (packageJson.build ? packageJson.build.productName : 'N/A'));
+
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  log('❌ UNCAUGHT EXCEPTION: ' + error.message);
+  log('Stack: ' + error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  log('❌ UNHANDLED REJECTION: ' + reason);
+  if (reason && reason.stack) {
+    log('Stack: ' + reason.stack);
+  }
+});
 
 // Configure auto-updater
 autoUpdater.autoDownload = false; // Don't auto-download, ask user first
@@ -18,28 +73,40 @@ let mainWindow;
 let db;
 
 // Ensure data directories exist
-const appPath = app.isPackaged 
-  ? path.join(app.getPath('userData'), 'data')
-  : path.join(__dirname, '..', 'data');
+log('Setting up paths...');
+let appPath, dbPath, pdfsPath, plansPath, personnelPath, exportsPath, configPath, logPath;
 
-const dbPath = path.join(appPath, 'loto.db');
-const pdfsPath = path.join(appPath, 'pdfs');
-const plansPath = path.join(appPath, 'plans');
-const personnelPath = path.join(appPath, 'personnel');
-const exportsPath = path.join(appPath, 'exports');
-const configPath = path.join(appPath, 'config.json');
-const logPath = path.join(appPath, 'app_activity.log');
+try {
+  appPath = app.isPackaged 
+    ? path.join(app.getPath('userData'), 'data')
+    : path.join(__dirname, '..', 'data');
+  log('App path: ' + appPath);
 
-// Create directories
-[appPath, pdfsPath, plansPath, personnelPath, exportsPath].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  dbPath = path.join(appPath, 'loto.db');
+  pdfsPath = path.join(appPath, 'pdfs');
+  plansPath = path.join(appPath, 'plans');
+  personnelPath = path.join(appPath, 'personnel');
+  exportsPath = path.join(appPath, 'exports');
+  configPath = path.join(appPath, 'config.json');
+  logPath = path.join(appPath, 'app_activity.log');
+
+  log('Creating directories...');
+  // Create directories
+  [appPath, pdfsPath, plansPath, personnelPath, exportsPath].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      log('Creating directory: ' + dir);
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  // Initialize log file if not exists
+  if (!fs.existsSync(logPath)) {
+    fs.writeFileSync(logPath, `LOTO App Activity Log - Started ${new Date().toISOString()}\n`, 'utf8');
   }
-});
-
-// Initialize log file if not exists
-if (!fs.existsSync(logPath)) {
-  fs.writeFileSync(logPath, `LOTO App Activity Log - Started ${new Date().toISOString()}\n`, 'utf8');
+  log('Directories created successfully');
+} catch (err) {
+  log('❌ Error setting up paths/directories: ' + err.message);
+  log('Stack: ' + err.stack);
 }
 
 // Initialize SQLite Database
@@ -203,9 +270,7 @@ function createWindow() {
     height: 900,
     show: false, // Don't show until ready
     webPreferences: {
-      preload: app.isPackaged 
-        ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true
     },
@@ -215,41 +280,34 @@ function createWindow() {
   
   // Force show window once ready
   mainWindow.once('ready-to-show', () => {
-    console.log('✅ Window ready to show!');
+    log('✅ Window ready to show!');
     mainWindow.show();
   });
 
   // Determine the correct path to index.html
-  let indexPath;
-  if (app.isPackaged) {
-    // When packaged, check both possible locations
-    const asarUnpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'build', 'index.html');
-    const regularPath = path.join(__dirname, '../build/index.html');
-    
-    indexPath = fs.existsSync(asarUnpackedPath) ? asarUnpackedPath : regularPath;
-  } else {
-    // Development mode
-    indexPath = path.join(__dirname, '../build/index.html');
-  }
+  const indexPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'app', 'build', 'index.html')
+    : path.join(__dirname, '../build/index.html');
   
   const startUrl = process.env.ELECTRON_START_URL || `file://${indexPath}`;
   
-  console.log('=== ELECTRON DEBUG INFO ===');
-  console.log('Is Packaged:', app.isPackaged);
-  console.log('__dirname:', __dirname);
-  console.log('process.resourcesPath:', process.resourcesPath);
-  console.log('Index path:', indexPath);
-  console.log('Start URL:', startUrl);
-  console.log('Index.html exists:', fs.existsSync(indexPath));
-  console.log('Preload.js exists:', fs.existsSync(path.join(__dirname, 'preload.js')));
-  console.log('===========================');
+  log('=== ELECTRON DEBUG INFO ===');
+  log('Is Packaged: ' + app.isPackaged);
+  log('__dirname: ' + __dirname);
+  log('process.resourcesPath: ' + process.resourcesPath);
+  log('Index path: ' + indexPath);
+  log('Start URL: ' + startUrl);
+  log('Index.html exists: ' + fs.existsSync(indexPath));
+  log('Preload.js exists: ' + fs.existsSync(path.join(__dirname, 'preload.js')));
+  log('===========================');
   
   mainWindow.loadURL(startUrl)
     .then(() => {
-      console.log('✅ URL loaded successfully');
+      log('✅ URL loaded successfully');
     })
     .catch((err) => {
-      console.error('❌ Failed to load URL:', err);
+      log('❌ Failed to load URL: ' + err.message);
+      log('Error stack: ' + err.stack);
       // Force show window anyway to see what's happening
       mainWindow.show();
     });
@@ -257,7 +315,7 @@ function createWindow() {
   // Fallback: Force show window after 3 seconds if not shown yet
   setTimeout(() => {
     if (mainWindow && !mainWindow.isVisible()) {
-      console.log('⚠️ Window not visible after 3 seconds, forcing show...');
+      log('⚠️ Window not visible after 3 seconds, forcing show...');
       mainWindow.show();
     }
   }, 3000);
@@ -269,23 +327,22 @@ function createWindow() {
   
   // Enhanced error logging
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.error('❌ Failed to load:', {
-      errorCode,
-      errorDescription,
-      validatedURL,
-      indexPath,
-      exists: fs.existsSync(indexPath)
-    });
+    log('❌ Failed to load page');
+    log('Error code: ' + errorCode);
+    log('Error description: ' + errorDescription);
+    log('Validated URL: ' + validatedURL);
+    log('Index path: ' + indexPath);
+    log('File exists: ' + fs.existsSync(indexPath));
     // Force show window to display error
     mainWindow.show();
   });
   
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('✅ Page finished loading');
+    log('✅ Page finished loading');
   });
   
   mainWindow.webContents.on('dom-ready', () => {
-    console.log('✅ DOM ready');
+    log('✅ DOM ready');
   });
 
   mainWindow.on('closed', () => {
@@ -344,8 +401,28 @@ ipcMain.on('install-update', () => {
 });
 
 app.whenReady().then(() => {
-  initDatabase();
-  createWindow();
+  log('========== APP READY ==========');
+  try {
+    log('Initializing database...');
+    initDatabase();
+    log('Database initialized successfully');
+  } catch (err) {
+    log('❌ Database init failed: ' + err.message);
+    log('Error stack: ' + err.stack);
+    app.quit();
+    return;
+  }
+  
+  try {
+    log('Creating window...');
+    createWindow();
+    log('Window created');
+  } catch (err) {
+    log('❌ Window creation failed: ' + err.message);
+    log('Error stack: ' + err.stack);
+    app.quit();
+    return;
+  }
 
   // Check for updates after 5 seconds (give app time to fully load)
   setTimeout(() => {
@@ -364,6 +441,10 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+}).catch((err) => {
+  log('❌ App whenReady failed: ' + err.message);
+  log('Error stack: ' + err.stack);
+  app.quit();
 });
 
 app.on('window-all-closed', () => {

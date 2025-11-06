@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.15] - 2025-01-08
+
+### 🐛 Fixed
+- **CRITICAL PACKAGING FIX**: Resolved packaged app not launching
+  - Disabled asar packaging to make build folder directly accessible
+  - Simplified resource path resolution for packaged apps
+  - Fixed file path handling for production builds
+  - App now works correctly in both development and packaged modes
+
+### ⚡ Improved
+- Cleaner packaging structure without asar archive
+- More reliable file path resolution
+- Better compatibility with auto-update system
+
+---
+
 ## [1.6.14] - 2025-01-08
 
 ### 🐛 Fixed
