@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.13] - 2025-01-08 (Debug Version)
+
+### 🐛 Fixed
+- **Enhanced Debugging**: Added comprehensive error logging and forced window display
+  - Window now force-shows after 3 seconds if not visible
+  - DevTools automatically open to show console errors
+  - Better error handling for URL loading failures
+  - Enhanced logging for all window lifecycle events
+  
+### 🔍 Diagnostic Features
+- Ready-to-show event handler
+- Automatic window visibility check
+- Fallback window display mechanism
+- Detailed error information in console
+
+---
+
 ## [1.6.12] - 2025-01-08
 
 ### 🐛 Fixed

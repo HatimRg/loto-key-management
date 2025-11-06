@@ -201,6 +201,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: false, // Don't show until ready
     webPreferences: {
       preload: app.isPackaged 
         ? path.join(__dirname, 'preload.js')
@@ -210,6 +211,12 @@ function createWindow() {
     },
     icon: path.join(__dirname, '../public/company-logo.png'),
     autoHideMenuBar: true
+  });
+  
+  // Force show window once ready
+  mainWindow.once('ready-to-show', () => {
+    console.log('✅ Window ready to show!');
+    mainWindow.show();
   });
 
   // Determine the correct path to index.html
@@ -237,16 +244,46 @@ function createWindow() {
   console.log('Preload.js exists:', fs.existsSync(path.join(__dirname, 'preload.js')));
   console.log('===========================');
   
-  mainWindow.loadURL(startUrl);
+  mainWindow.loadURL(startUrl)
+    .then(() => {
+      console.log('✅ URL loaded successfully');
+    })
+    .catch((err) => {
+      console.error('❌ Failed to load URL:', err);
+      // Force show window anyway to see what's happening
+      mainWindow.show();
+    });
 
-  // Only open DevTools in development
-  if (!app.isPackaged) {
-    mainWindow.webContents.openDevTools();
-  }
+  // Fallback: Force show window after 3 seconds if not shown yet
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      console.log('⚠️ Window not visible after 3 seconds, forcing show...');
+      mainWindow.show();
+    }
+  }, 3000);
+
+  // Open DevTools to debug (temporarily enabled in production)
+  mainWindow.webContents.openDevTools();
   
-  // Log any load errors
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('Failed to load:', errorCode, errorDescription);
+  // Enhanced error logging
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('❌ Failed to load:', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      indexPath,
+      exists: fs.existsSync(indexPath)
+    });
+    // Force show window to display error
+    mainWindow.show();
+  });
+  
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('✅ Page finished loading');
+  });
+  
+  mainWindow.webContents.on('dom-ready', () => {
+    console.log('✅ DOM ready');
   });
 
   mainWindow.on('closed', () => {
