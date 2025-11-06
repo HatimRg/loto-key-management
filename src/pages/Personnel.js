@@ -1,0 +1,850 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Users, Plus, Edit2, Trash2, AlertCircle, Search, Upload, Download, FileText, X, Eye, FileDown } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
+import { useToast } from '../context/ToastContext';
+import Footer from '../components/Footer';
+import ConfirmDialog from '../components/ConfirmDialog';
+import db from '../utils/database';
+import { exportToExcel, parseExcelFile, validatePersonnelExcel } from '../utils/excelHelper';
+import { generatePersonnelTemplate, exportFailedRows } from '../utils/importTemplates';
+import { saveFileDualWrite } from '../utils/fileSync';
+
+const { ipcRenderer } = window;
+
+function Personnel() {
+  const location = useLocation();
+  const { userMode, isOnline } = useApp();
+  const { showToast } = useToast();
+  const canEdit = userMode === 'AdminEditor' || userMode === 'RestrictedEditor';
+  const csvInputRef = useRef(null);
+  const pdfInputRef = useRef(null);
+  const [personnel, setPersonnel] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [showPDFViewer, setShowPDFViewer] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState({ show: false, id: null, name: '' });
+  const [viewingPDF, setViewingPDF] = useState(null);
+  const [editingPerson, setEditingPerson] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    lastname: '',
+    id_card: '',
+    company: '',
+    habilitation: '',
+    pdf_path: ''
+  });
+  const [selectedFile, setSelectedFile] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Handle navigation state separately to avoid triggering loadData
+  useEffect(() => {
+    if (location.state?.searchTerm) {
+      setSearchTerm(location.state.searchTerm);
+    }
+  }, [location.state]);
+
+  const loadData = async () => {
+    // Only show loading spinner on initial load, not on updates (preserves scroll)
+    const isInitialLoad = personnel.length === 0;
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+    
+    try {
+      const result = await db.getPersonnel();
+      if (result.success) {
+        setPersonnel(result.data);
+      }
+    } catch (error) {
+      console.error('❌ Error loading personnel:', error);
+    } finally {
+      // CRITICAL: Always clear loading state, even on error
+      if (isInitialLoad) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleAdd = () => {
+    setEditingPerson(null);
+    setFormData({
+      name: '',
+      lastname: '',
+      id_card: '',
+      company: '',
+      habilitation: '',
+      pdf_path: ''
+    });
+    setSelectedFile(null);
+    setShowModal(true);
+  };
+
+  const handleEdit = (person) => {
+    setEditingPerson(person);
+    setFormData({
+      name: person.name,
+      lastname: person.lastname,
+      id_card: person.id_card,
+      company: person.company || '',
+      habilitation: person.habilitation || '',
+      pdf_path: person.pdf_path || ''
+    });
+    setSelectedFile(null);
+    setShowModal(true);
+  };
+
+  const handleDelete = (id, name, lastname) => {
+    setConfirmDelete({ show: true, id, name: `${name} ${lastname}` });
+  };
+
+  const confirmDeletePersonnel = async () => {
+    const { id } = confirmDelete;
+    // Get person info before deleting for history log
+    const person = personnel.find(p => p.id === id);
+    const result = await db.deletePersonnel(id);
+    if (result.success) {
+      // Log to history
+      await db.addHistory({
+        action: `Deleted personnel: ${person?.name || ''} ${person?.lastname || ''}`,
+        user_mode: userMode,
+        details: `ID Card: ${person?.id_card || 'N/A'}`
+      });
+      showToast('✓ Personnel deleted successfully', 'success');
+      loadData();
+    } else {
+      showToast('Failed to delete personnel', 'error');
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    const success = await generatePersonnelTemplate();
+    if (success) {
+      showToast('✓ Import template downloaded with instructions!', 'success', 4000);
+    } else {
+      showToast('Failed to download template', 'error');
+    }
+  };
+
+  const handleExportExcel = async () => {
+    // Map database fields to import template column names (exclude PDFs)
+    const exportData = filteredPersonnel.map(person => ({
+      'First Name': person.name,
+      'Last Name': person.lastname,
+      'ID Card': person.id_card || '',
+      'Company': person.company,
+      'Habilitation': person.habilitation
+    }));
+
+    const filename = `personnel_export_${new Date().toISOString().split('T')[0]}`;
+    const success = await exportToExcel(exportData, filename, 'Personnel');
+    if (success) {
+      showToast('Excel file exported successfully', 'success');
+    }
+  };
+
+  // Handle Excel Import
+  const handleExcelImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      showToast('Processing Excel import...', 'info', 1500);
+
+      const data = await parseExcelFile(file);
+      
+      if (!data || data.length === 0) {
+        showToast('No data found in Excel file', 'error');
+        return;
+      }
+
+      console.log(`📥 Processing ${data.length} personnel rows from Excel...`);
+
+      // Validate with new advanced rules
+      const validation = validatePersonnelExcel(data);
+      
+      if (validation.errors.length > 0) {
+        console.warn('⚠️  Validation warnings:', validation.errors.slice(0, 10));
+      }
+
+      let imported = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      // Process in batches to prevent timeouts on large imports
+      const BATCH_SIZE = 20;
+      const totalRows = validation.valid.length;
+
+      for (let i = 0; i < totalRows; i++) {
+        const row = validation.valid[i];
+        
+        // Show progress for large imports
+        if (totalRows > 50 && i % 10 === 0) {
+          console.log(`📊 Progress: ${i}/${totalRows} rows processed...`);
+        }
+        
+        const personData = {
+          name: row.name,
+          lastname: row.lastname,
+          id_card: row.id_card || '',
+          company: row.company,
+          habilitation: row.habilitation,
+          pdf_path: ''
+        };
+
+        // Check for duplicates (name + company)
+        const isDuplicate = personnel.some(p => 
+          p.name.toLowerCase() === personData.name.toLowerCase() &&
+          p.lastname.toLowerCase() === personData.lastname.toLowerCase() &&
+          p.company.toLowerCase() === personData.company.toLowerCase()
+        );
+
+        if (isDuplicate) {
+          skipped++;
+          console.log(`⊘ Skipped duplicate: ${personData.name} ${personData.lastname}`);
+          // Add to failed rows for tracking
+          validation.failedRows.push({
+            'Row': i + 2,
+            'First Name': personData.name,
+            'Last Name': personData.lastname,
+            'ID Card': personData.id_card,
+            'Company': personData.company,
+            'Habilitation': personData.habilitation,
+            'Problem': 'Duplicate entry (same name + company already exists)'
+          });
+          continue;
+        }
+
+        // Add personnel
+        try {
+          const result = await db.addPersonnel(personData);
+          if (result.success) {
+            imported++;
+            console.log(`✓ Row ${imported}/${totalRows}: ${personData.name} ${personData.lastname}`);
+          } else {
+            failed++;
+            console.error(`✗ Failed to add: ${personData.name}`, result.error);
+          }
+        } catch (error) {
+          failed++;
+          console.error(`✗ Exception adding row ${i + 1}:`, error);
+        }
+        
+        // Brief pause every batch to prevent overwhelming database
+        if ((i + 1) % BATCH_SIZE === 0 && i < totalRows - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      console.log(`📊 Final: ${imported} imported, ${skipped} skipped, ${failed} failed out of ${totalRows} total rows`);
+
+      // Export failed rows if any
+      if (validation.failedRows && validation.failedRows.length > 0) {
+        console.log(`📤 Exporting ${validation.failedRows.length} failed rows...`);
+        const exported = await exportFailedRows(validation.failedRows, 'Personnel');
+        if (exported) {
+          let message = [];
+          if (imported > 0) message.push(`✓ Imported: ${imported}`);
+          if (skipped > 0) message.push(`⊘ Skipped (duplicates): ${skipped}`);
+          if (validation.failedRows.length > 0) message.push(`✗ Failed: ${validation.failedRows.length} (errors file downloaded)`);
+          
+          showToast(message.join(' • '), 'warning', 6000);
+        }
+      } else if (imported > 0) {
+        showToast(`✓ Successfully imported ${imported} personnel record${imported !== 1 ? 's' : ''}!`, 'success', 4000);
+      } else {
+        showToast('No valid rows to import', 'error');
+      }
+
+      // Reload data
+      await loadData();
+    } catch (error) {
+      showToast(`Import error: ${error.message}`, 'error');
+      console.error('Import error:', error);
+    }
+
+    event.target.value = '';
+  };
+
+  // Handle PDF file selection (browser compatible)
+  const handlePDFSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      showToast('Please select a PDF file', 'error');
+      return;
+    }
+
+    // Read file as base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setSelectedFile({
+        name: file.name,
+        data: e.target?.result,
+        type: file.type
+      });
+      showToast(`PDF selected: ${file.name}`, 'success');
+    };
+    reader.onerror = () => {
+      showToast('Failed to read PDF file', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      let pdfCloudUrl = formData.pdf_path; // Use existing cloud URL if no new file
+      
+      // Upload file to Supabase Storage if new one was selected
+      if (selectedFile) {
+        console.log('☁️ Uploading file to Supabase Storage...');
+        const saveResult = await saveFileDualWrite(
+          `${formData.id_card}_${selectedFile.name}`,
+          selectedFile.data,
+          'personnel'  // Upload to personnel-certificates bucket
+        );
+        
+        if (saveResult.success) {
+          pdfCloudUrl = saveResult.cloudUrl;
+          console.log('✅ File uploaded to Supabase:', pdfCloudUrl);
+        } else {
+          console.error('❌ Failed to upload file:', saveResult.error);
+          showToast('Failed to upload file: ' + saveResult.error, 'error');
+          return;
+        }
+      }
+      
+      // Store cloud URL in database
+      const personData = { ...formData, pdf_path: pdfCloudUrl };
+      
+      console.log('💾 Saving personnel with cloud URL:', pdfCloudUrl);
+      
+      if (editingPerson) {
+        const result = await db.updatePersonnel(editingPerson.id, personData);
+        if (result.success) {
+          console.log('✅ Personnel updated in DATABASE with cloud URL:', pdfCloudUrl);
+          // Log to history
+          await db.addHistory({
+            action: `Updated personnel: ${personData.name} ${personData.lastname}`,
+            user_mode: userMode,
+            details: `ID Card: ${personData.id_card}, Company: ${personData.company}`
+          });
+          showToast('Personnel updated successfully', 'success');
+        } else {
+          console.error('❌ Failed to update personnel:', result.error);
+          showToast('Failed to update personnel', 'error');
+        }
+      } else {
+        const result = await db.addPersonnel(personData);
+        if (result.success) {
+          console.log('✅ Personnel added to DATABASE with cloud URL:', pdfCloudUrl);
+          // Log to history
+          await db.addHistory({
+            action: `Added personnel: ${personData.name} ${personData.lastname}`,
+            user_mode: userMode,
+            details: `ID Card: ${personData.id_card}, Company: ${personData.company}`
+          });
+          showToast('Personnel added successfully', 'success');
+        } else {
+          console.error('❌ Failed to add personnel:', result.error);
+          showToast('Failed to add personnel', 'error');
+        }
+      }
+      
+      await loadData();
+    } catch (error) {
+      console.error('❌ Submit error:', error);
+      showToast(`Error: ${error.message}`, 'error');
+    } finally {
+      // CRITICAL: Always close modal even on error
+      setShowModal(false);
+    }
+  };
+
+  const handleViewPDF = async (pdfPath, personName) => {
+    console.log('📄 Attempting to view PDF:', pdfPath, 'for', personName);
+    
+    if (!pdfPath) {
+      console.error('❌ No PDF path provided');
+      showToast('No PDF available', 'error');
+      return;
+    }
+
+    try {
+      // Check if it's a Supabase cloud URL (https://)
+      if (pdfPath.startsWith('http://') || pdfPath.startsWith('https://')) {
+        console.log('☁️ Cloud URL detected - opening directly:', pdfPath);
+        setViewingPDF({ url: pdfPath, name: personName });
+        setShowPDFViewer(true);
+        return;
+      }
+      
+      // Check if it's a data URL (browser mode)
+      if (pdfPath.startsWith('data:')) {
+        console.log('🌐 Browser mode - using data URL');
+        setViewingPDF({ url: pdfPath, name: personName });
+        setShowPDFViewer(true);
+        return;
+      }
+      
+      // Local file path - read via IPC (Electron)
+      if (ipcRenderer) {
+        console.log('💻 Electron mode - reading file via IPC:', pdfPath);
+        const result = await ipcRenderer.invoke('read-file', pdfPath);
+        console.log('📥 IPC result:', result);
+        if (result.success) {
+          console.log('✅ File read successfully, size:', result.data?.length || 0);
+          // Convert base64 to blob (browser-compatible)
+          const binaryString = atob(result.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          console.log('✅ PDF blob created, opening viewer');
+          setViewingPDF({ url, name: personName });
+          setShowPDFViewer(true);
+        } else {
+          console.error('❌ Failed to read file:', result.error);
+          showToast(`Could not open file: ${result.error || 'File not found'}`, 'error');
+        }
+      } else {
+        console.error('❌ No IPC available and not a cloud/data URL');
+        showToast('PDF viewing not available', 'error');
+      }
+    } catch (error) {
+      console.error('❌ Exception viewing PDF:', error);
+      showToast(`Error loading PDF: ${error.message}`, 'error');
+    }
+  };
+
+  const handleDownloadPDF = async (pdfPath, idCard) => {
+    if (!pdfPath) return;
+
+    try {
+      // Check if it's a Supabase cloud URL
+      if (pdfPath.startsWith('http://') || pdfPath.startsWith('https://')) {
+        console.log('☁️ Downloading from cloud URL:', pdfPath);
+        const a = document.createElement('a');
+        a.href = pdfPath;
+        a.download = `certificate_${idCard}.pdf`;
+        a.target = '_blank';
+        a.click();
+        showToast('PDF download started', 'success');
+        return;
+      }
+      
+      // Check if it's a data URL (browser mode)
+      if (pdfPath.startsWith('data:')) {
+        // Create download link from data URL
+        const a = document.createElement('a');
+        a.href = pdfPath;
+        a.download = `certificate_${idCard}.pdf`;
+        a.click();
+        showToast('PDF downloaded', 'success');
+        return;
+      }
+      
+      // Local file - read via IPC (Electron)
+      if (ipcRenderer) {
+        const result = await ipcRenderer.invoke('read-file', pdfPath);
+        if (result.success) {
+          // Convert base64 to blob (browser-compatible)
+          const binaryString = atob(result.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `certificate_${idCard}.pdf`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+          showToast('PDF downloaded', 'success');
+        } else {
+          showToast('Failed to download PDF', 'error');
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      showToast('Error downloading PDF', 'error');
+    }
+  };
+
+  // Memoize filtered personnel to prevent recalculation on every render
+  const filteredPersonnel = useMemo(() => {
+    return personnel.filter(person => {
+      const searchLower = searchTerm.toLowerCase();
+      return !searchTerm || 
+        person.name.toLowerCase().includes(searchLower) ||
+        person.lastname.toLowerCase().includes(searchLower) ||
+        person.id_card.toLowerCase().includes(searchLower) ||
+        person.company?.toLowerCase().includes(searchLower);
+    });
+  }, [personnel, searchTerm]);
+
+  return (
+    <div className="space-y-6 relative">
+      {/* Loading Overlay - Only on initial load */}
+      {loading && (
+        <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 z-50 flex items-center justify-center rounded-lg">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+      {/* Hidden File Inputs */}
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={handleExcelImport}
+        className="hidden"
+      />
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handlePDFSelect}
+        className="hidden"
+      />
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center space-x-2">
+          <Users className="w-7 h-7 text-green-600" />
+          <span>Personnel Access Control</span>
+        </h1>
+        <div className="flex space-x-2">
+          {/* Export is available to ALL users including Visitor */}
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+            title="Export personnel data to Excel (without PDFs)"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Excel</span>
+          </button>
+          
+          {/* Add/Import/Template only for editors */}
+          {canEdit && (
+            <>
+              <button
+                onClick={isOnline ? handleDownloadTemplate : undefined}
+                disabled={!isOnline}
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                  isOnline
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
+                    : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
+                }`}
+                title={isOnline ? 'Download import template with instructions' : '⚠️ App is offline - Connect to internet to edit the database'}
+              >
+                <FileDown className="w-4 h-4" />
+                <span>Get Template</span>
+              </button>
+              <button
+                onClick={isOnline ? () => csvInputRef.current?.click() : undefined}
+                disabled={!isOnline}
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                  isOnline
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+                    : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
+                }`}
+                title={isOnline ? 'Import personnel from Excel' : '⚠️ App is offline - Connect to internet to edit the database'}
+              >
+                <Upload className="w-4 h-4" />
+                <span>Import Excel</span>
+              </button>
+              <button
+                onClick={isOnline ? handleAdd : undefined}
+                disabled={!isOnline}
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                  isOnline
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                    : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
+                }`}
+                title={isOnline ? 'Add new personnel' : '⚠️ App is offline - Connect to internet to edit the database'}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Personnel</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 border border-gray-200 dark:border-gray-700">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search personnel by name, ID card, or company..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+        </div>
+      </div>
+
+      {/* Personnel Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {filteredPersonnel.length === 0 ? (
+          <div className="text-center py-12">
+            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400">
+              {personnel.length === 0 ? 'No personnel records found. Add one to get started!' : 'No personnel match your search'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID Card</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Company</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Habilitation / Certificate</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredPersonnel.map((person) => (
+                  <tr key={person.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {person.name} {person.lastname}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                      {person.id_card}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                      {person.company || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {person.pdf_path ? (
+                        <button
+                          onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
+                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline flex items-center space-x-1"
+                        >
+                          <span>{person.habilitation || 'View Certificate'}</span>
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <span className="text-gray-600 dark:text-gray-300">
+                          {person.habilitation || '-'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        {canEdit && (
+                          <>
+                            <button
+                              onClick={isOnline ? () => handleEdit(person) : undefined}
+                              disabled={!isOnline}
+                              className={`p-2 rounded ${
+                                isOnline
+                                  ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer'
+                                  : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
+                              }`}
+                              title={isOnline ? 'Edit person' : '⚠️ App is offline - Connect to internet to edit'}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={isOnline ? () => handleDelete(person.id, person.name, person.lastname) : undefined}
+                              disabled={!isOnline}
+                              className={`p-2 rounded ${
+                                isOnline
+                                  ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer'
+                                  : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
+                              }`}
+                              title={isOnline ? 'Delete person' : '⚠️ App is offline - Connect to internet to edit'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              {editingPerson ? 'Edit Personnel' : 'Add New Personnel'}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={formData.lastname}
+                    onChange={(e) => setFormData({...formData, lastname: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ID Card <span className="text-gray-400 text-xs">(Optional)</span></label>
+                <input
+                  type="text"
+                  value={formData.id_card}
+                  onChange={(e) => setFormData({...formData, id_card: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Company</label>
+                <input
+                  type="text"
+                  value={formData.company}
+                  onChange={(e) => setFormData({...formData, company: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Habilitation</label>
+                <input
+                  type="text"
+                  value={formData.habilitation}
+                  onChange={(e) => setFormData({...formData, habilitation: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  PDF Certificate (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => pdfInputRef.current?.click()}
+                  className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors flex items-center justify-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  <Upload className="w-5 h-5" />
+                  <span>{selectedFile ? `✓ ${selectedFile.name}` : 'Click to upload PDF'}</span>
+                </button>
+                {formData.pdf_path && !selectedFile && (
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-2 flex items-center space-x-1">
+                    <FileText className="w-4 h-4" />
+                    <span>Current: {formData.pdf_path.split(/[\\/]/).pop()}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition-colors"
+                >
+                  {editingPerson ? 'Update' : 'Add'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-white py-2 rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {showPDFViewer && viewingPDF && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                <FileText className="w-5 h-5" />
+                <span>Certificate: {viewingPDF.name}</span>
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    const person = personnel.find(p => `${p.name} ${p.lastname}` === viewingPDF.name);
+                    if (person) handleDownloadPDF(person.pdf_path, person.id_card);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPDFViewer(false);
+                    if (viewingPDF.url && !viewingPDF.url.startsWith('data:')) {
+                      window.URL.revokeObjectURL(viewingPDF.url);
+                    }
+                    setViewingPDF(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
+            </div>
+            
+            {/* PDF Content */}
+            <div className="flex-1 overflow-hidden">
+              <iframe
+                src={viewingPDF.url}
+                className="w-full h-full"
+                title="PDF Viewer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDelete.show}
+        onClose={() => setConfirmDelete({ show: false, id: null, name: '' })}
+        onConfirm={confirmDeletePersonnel}
+        title="Delete Personnel"
+        message={`Are you sure you want to delete "${confirmDelete.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
+
+      {/* Footer */}
+      <Footer />
+    </div>
+  );
+}
+
+export default Personnel;

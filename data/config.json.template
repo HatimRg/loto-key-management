@@ -1,0 +1,10 @@
+{
+  "SUPABASE_URL": "https://qrjkgvglorotucerfspt.supabase.co",
+  "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyamtndmdsb3JvdHVjZXJmc3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwOTAwNDcsImV4cCI6MjA3NzY2NjA0N30.6zdPTeIIWN_uQc-SPEYkHLmaGIUY-42c3mOTqdycfok",
+  "AUTO_SYNC_ENABLED": true,
+  "SUPABASE_BUCKET": "loto_pdfs",
+  "ACCESS_CODE": "010203",
+  "ADMIN_ACCESS_CODE": "010203",
+  "RESTRICTED_ACCESS_CODE": "sgtm123"
+}
+

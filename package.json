@@ -1,0 +1,128 @@
+{
+  "name": "loto-key-management",
+  "version": "1.6.9",
+  "description": "LOTO Key Management System - Offline + Supabase Sync",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "postbuild": "xcopy /Y electron\\main.js build\\electron.js* && xcopy /Y electron\\preload.js build\\preload.js*",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && cross-env ELECTRON_START_URL=http://localhost:3000 electron .\"",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "publish": "electron-builder --publish always",
+    "release": "npm run build && npm run publish",
+    "logic-test": "node src/tests/testRunner.js run",
+    "logic-test:optimize": "node src/tests/testRunner.js run --optimize",
+    "test:clear": "node src/tests/testRunner.js clear",
+    "test:stress": "node src/tests/testRunner.js run --optimize",
+    "test:all": "npm run logic-test:optimize"
+  },
+  "build": {
+    "appId": "com.loto.keymanagement",
+    "productName": "LOTO Key Management",
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "directories": {
+      "buildResources": "public",
+      "output": "dist"
+    },
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/A minimalist logo fo.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LOTO Key Management",
+      "installerIcon": "public/A minimalist logo fo.ico",
+      "uninstallerIcon": "public/A minimalist logo fo.ico",
+      "license": "LICENSE",
+      "runAfterFinish": true
+    },
+    "extraResources": [
+      {
+        "from": "data/config.json.template",
+        "to": "data/config.json"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "HatimRg",
+        "repo": "loto-key-management",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "keywords": [
+    "loto",
+    "lockout",
+    "tagout",
+    "safety"
+  ],
+  "author": "Hatim RG",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.78.0",
+    "electron-log": "^5.4.3",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
+    "lucide-react": "^0.294.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "postcss": "^8.4.32",
+    "react-scripts": "5.0.1",
+    "tailwindcss": "^3.3.6",
+    "wait-on": "^7.2.0"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.4.1"
+  }
+}

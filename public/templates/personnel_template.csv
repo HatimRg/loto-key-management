@@ -1,0 +1,4 @@
+name,company,job_title,habilitation_type,phone,email
+"John Doe","Company A","Electrician","B2","+1234567890","john.doe@example.com"
+"Jane Smith","Company B","Electrical Engineer","BR","+0987654321","jane.smith@example.com"
+"Bob Johnson","Contractor","Maintenance Tech","H1","+5551234567","bob.j@example.com"

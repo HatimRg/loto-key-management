@@ -1,0 +1,4 @@
+name,zone,location,state,lock_key,general_breaker
+"Breaker Example 1","Zone A","Main Building","Off","","" 
+"Breaker Example 2","Zone B","Warehouse","On","","Breaker Example 1"
+"Breaker Example 3","Zone C","Outdoor","Closed","KEY-001",""

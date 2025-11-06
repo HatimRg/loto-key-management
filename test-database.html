@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LOTO KMS - Database Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }
+        .test-box {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 LOTO KMS - Database Connection Test</h1>
+    
+    <div class="test-box">
+        <h2>1. Check IPC Availability</h2>
+        <button onclick="testIPC()">Test IPC</button>
+        <div id="ipc-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>2. Test Database Query</h2>
+        <button onclick="testQuery()">Query Breakers</button>
+        <div id="query-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>3. Add Test Breaker</h2>
+        <button onclick="testAdd()">Add Breaker</button>
+        <div id="add-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>4. Test Input Field</h2>
+        <input type="text" id="test-input" placeholder="Type something here..." style="width: 300px; padding: 8px;">
+        <button onclick="testInput()">Check Input</button>
+        <div id="input-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>Console Output</h2>
+        <pre id="console-output">Open browser console (F12) to see detailed logs...</pre>
+    </div>
+
+    <script>
+        // Redirect console.log to page
+        const consoleOutput = document.getElementById('console-output');
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            consoleOutput.textContent += args.join(' ') + '\n';
+        };
+
+        function testIPC() {
+            const result = document.getElementById('ipc-result');
+            console.log('Testing IPC availability...');
+            
+            if (window.ipcRenderer) {
+                result.innerHTML = '<p class="success">✅ IPC Available</p>';
+                console.log('✅ window.ipcRenderer exists');
+                console.log('Methods:', Object.keys(window.ipcRenderer));
+            } else {
+                result.innerHTML = '<p class="error">❌ IPC NOT Available</p><p>Running in browser mode (not Electron)</p>';
+                console.error('❌ window.ipcRenderer is undefined');
+                console.log('This is browser mode. Run the app with: npm run electron-dev');
+            }
+        }
+
+        async function testQuery() {
+            const result = document.getElementById('query-result');
+            console.log('Testing database query...');
+            
+            if (!window.ipcRenderer) {
+                result.innerHTML = '<p class="error">❌ IPC not available. Cannot test database.</p>';
+                return;
+            }
+            
+            try {
+                const queryResult = await window.ipcRenderer.invoke('db-query', 'SELECT * FROM breakers LIMIT 5');
+                console.log('Query result:', queryResult);
+                
+                if (queryResult.success) {
+                    const count = queryResult.data?.length || 0;
+                    result.innerHTML = `
+                        <p class="success">✅ Query successful!</p>
+                        <p>Found ${count} breakers</p>
+                        <pre>${JSON.stringify(queryResult.data, null, 2)}</pre>
+                    `;
+                } else {
+                    result.innerHTML = `<p class="error">❌ Query failed: ${queryResult.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Query error:', error);
+                result.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testAdd() {
+            const result = document.getElementById('add-result');
+            console.log('Testing add breaker...');
+            
+            if (!window.ipcRenderer) {
+                result.innerHTML = '<p class="error">❌ IPC not available. Cannot test add.</p>';
+                return;
+            }
+            
+            try {
+                const testBreaker = {
+                    name: 'TEST-' + Date.now(),
+                    zone: 'R01',
+                    location: 'Test Location',
+                    state: 'Off',
+                    lock_key: null,
+                    general_breaker: ''
+                };
+                
+                const addResult = await window.ipcRenderer.invoke('db-run', 
+                    'INSERT INTO breakers (name, zone, location, state, lock_key, general_breaker) VALUES (?, ?, ?, ?, ?, ?)',
+                    [testBreaker.name, testBreaker.zone, testBreaker.location, testBreaker.state, testBreaker.lock_key, testBreaker.general_breaker]
+                );
+                
+                console.log('Add result:', addResult);
+                
+                if (addResult.success) {
+                    result.innerHTML = `
+                        <p class="success">✅ Breaker added successfully!</p>
+                        <p>Name: ${testBreaker.name}</p>
+                        <p>Now query the database to see it.</p>
+                    `;
+                } else {
+                    result.innerHTML = `<p class="error">❌ Add failed: ${addResult.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Add error:', error);
+                result.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        function testInput() {
+            const input = document.getElementById('test-input');
+            const result = document.getElementById('input-result');
+            
+            console.log('Testing input field...');
+            console.log('Input element:', input);
+            console.log('Value:', input.value);
+            console.log('Disabled:', input.disabled);
+            console.log('ReadOnly:', input.readOnly);
+            console.log('Active element:', document.activeElement);
+            
+            if (input.value) {
+                result.innerHTML = `
+                    <p class="success">✅ Input is working!</p>
+                    <p>You typed: <strong>${input.value}</strong></p>
+                `;
+            } else {
+                result.innerHTML = `
+                    <p>Type something in the input field first, then click this button.</p>
+                `;
+            }
+        }
+
+        // Auto-run IPC test on load
+        window.addEventListener('load', () => {
+            console.log('Page loaded. Running automatic tests...');
+            testIPC();
+        });
+    </script>
+</body>
+</html>

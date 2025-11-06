@@ -1,0 +1,47 @@
+appId: com.loto.keymanagement
+productName: LOTO Key Management
+extends: null
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+npmRebuild: false
+
+directories:
+  buildResources: public
+  output: dist
+
+files:
+  - build/**/*
+  - electron/**/*
+  - node_modules/**/*
+  - package.json
+  - "!node_modules/.cache"
+
+asar: true
+asarUnpack:
+  - "**/*.node"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: public/A minimalist logo fo.ico
+  requestedExecutionLevel: asInvoker
+  sign: null
+  signingHashAlgorithms:
+    - sha256
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LOTO Key Management
+  installerIcon: public/A minimalist logo fo.ico
+  uninstallerIcon: public/A minimalist logo fo.ico
+  license: LICENSE
+  runAfterFinish: true
+
+extraResources:
+  - from: data/config.json.template
+    to: data/config.json
