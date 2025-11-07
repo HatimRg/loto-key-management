@@ -18,7 +18,7 @@ try {
   } catch (err2) {
     // Ultimate fallback
     packageJson = {
-      version: '1.7.2',
+      version: '1.7.4',
       description: 'LOTO Key Management System'
     };
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, Moon, Sun, Wifi, WifiOff, Download, Upload, Trash2, User, X, Database, Save, Info, Edit2, CheckCircle, Wrench, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, Moon, Sun, Wifi, WifiOff, Download, Upload, Trash2, User, X, Database, Save, Info, Edit2, CheckCircle, Wrench, RefreshCw, AlertTriangle, Check, AlertCircle, Bell, BellOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Footer from '../components/Footer';
 import db from '../utils/database';
@@ -66,6 +66,12 @@ function Settings() {
   const [dependencies, setDependencies] = useState(null);
   const [logs, setLogs] = useState('');
   const [repairMessage, setRepairMessage] = useState('');
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateCheckResult, setUpdateCheckResult] = useState(null); // 'available', 'up-to-date', 'error'
+  const [showUpdateControlModal, setShowUpdateControlModal] = useState(false);
+  const [updateControlVersion, setUpdateControlVersion] = useState('');
+  const [updateControlEnabled, setUpdateControlEnabled] = useState(false);
+  const [loadingUpdateControl, setLoadingUpdateControl] = useState(false);
 
   useEffect(() => {
     // Warn if Electron is not available
@@ -87,7 +93,187 @@ function Settings() {
     loadDependencies();
     loadLogs();
     loadDbStats();
+    loadUpdateControlState();
+    
+    // Listen for update check results
+    if (ipcRenderer) {
+      const handleUpdateAvailable = (event, info) => {
+        console.log('✅ Update available:', info);
+        setUpdateCheckResult('available');
+        setCheckingUpdate(false);
+        showToast(`Update available: v${info.version}`, 'success');
+      };
+      
+      const handleUpdateNotAvailable = () => {
+        console.log('✅ App is up to date');
+        setUpdateCheckResult('up-to-date');
+        setCheckingUpdate(false);
+        showToast('You are running the latest version', 'success');
+      };
+      
+      const handleUpdateError = (event, error) => {
+        console.error('❌ Update check failed:', error);
+        setUpdateCheckResult('error');
+        setCheckingUpdate(false);
+        showToast('Failed to check for updates. Check your internet connection.', 'error');
+      };
+      
+      ipcRenderer.on('update-available', handleUpdateAvailable);
+      ipcRenderer.on('update-not-available', handleUpdateNotAvailable);
+      ipcRenderer.on('update-error', handleUpdateError);
+      
+      return () => {
+        ipcRenderer.removeListener('update-available', handleUpdateAvailable);
+        ipcRenderer.removeListener('update-not-available', handleUpdateNotAvailable);
+        ipcRenderer.removeListener('update-error', handleUpdateError);
+      };
+    }
   }, [config]);
+
+  const loadUpdateControlState = async () => {
+    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) return;
+    
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      
+      const { data, error } = await supabase
+        .from('update_control')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading update control state:', error);
+        return;
+      }
+      
+      if (data) {
+        setUpdateControlEnabled(data.is_update_available);
+        setUpdateControlVersion(data.version_number || '');
+      }
+    } catch (error) {
+      console.error('Error loading update control:', error);
+    }
+  };
+
+  const handleUpdateControlToggle = () => {
+    if (updateControlEnabled) {
+      // Disable update control
+      disableUpdateControl();
+    } else {
+      // Show modal to enable
+      setShowUpdateControlModal(true);
+    }
+  };
+
+  const enableUpdateControl = async () => {
+    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) {
+      showToast('❌ Supabase not configured', 'error');
+      return;
+    }
+    
+    if (!updateControlVersion.trim()) {
+      showToast('❌ Please enter a version number', 'error');
+      return;
+    }
+    
+    setLoadingUpdateControl(true);
+    
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      
+      // Get the existing row or create new one
+      const { data: existing } = await supabase
+        .from('update_control')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      if (existing) {
+        // Update existing
+        const { error } = await supabase
+          .from('update_control')
+          .update({
+            is_update_available: true,
+            version_number: updateControlVersion.trim(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        if (error) throw error;
+      } else {
+        // Insert new
+        const { error } = await supabase
+          .from('update_control')
+          .insert({
+            is_update_available: true,
+            version_number: updateControlVersion.trim()
+          });
+        
+        if (error) throw error;
+      }
+      
+      setUpdateControlEnabled(true);
+      setShowUpdateControlModal(false);
+      showToast(`✅ Update notification enabled for v${updateControlVersion.trim()}`, 'success');
+      logger.log('Admin enabled update control', {
+        version: updateControlVersion.trim(),
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error enabling update control:', error);
+      showToast('❌ Failed to enable update notification', 'error');
+    } finally {
+      setLoadingUpdateControl(false);
+    }
+  };
+
+  const disableUpdateControl = async () => {
+    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) {
+      showToast('❌ Supabase not configured', 'error');
+      return;
+    }
+    
+    setLoadingUpdateControl(true);
+    
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      
+      const { data: existing } = await supabase
+        .from('update_control')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      if (existing) {
+        const { error } = await supabase
+          .from('update_control')
+          .update({
+            is_update_available: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+        
+        if (error) throw error;
+      }
+      
+      setUpdateControlEnabled(false);
+      setUpdateControlVersion('');
+      showToast('✅ Update notification disabled', 'success');
+      logger.log('Admin disabled update control', {
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error disabling update control:', error);
+      showToast('❌ Failed to disable update notification', 'error');
+    } finally {
+      setLoadingUpdateControl(false);
+    }
+  };
 
   const loadDbStats = async () => {
     try {
@@ -623,6 +809,188 @@ function Settings() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Control Modal */}
+      {showUpdateControlModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 border-2 border-orange-500 dark:border-orange-400">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="bg-gradient-to-br from-orange-500 to-amber-600 p-3 rounded-lg">
+                <Bell className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Alert All Users</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Force update notification</p>
+              </div>
+            </div>
+            
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                This will show an update notification to <strong>all users</strong> when they launch the app.
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                ⚠️ Use this to alert users about important updates or maintenance.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Version Number
+              </label>
+              <input
+                type="text"
+                value={updateControlVersion}
+                onChange={(e) => setUpdateControlVersion(e.target.value)}
+                placeholder="e.g., 1.8.0 or 2.0.0-beta"
+                className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                disabled={loadingUpdateControl}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Enter any version format - no strict validation
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={enableUpdateControl}
+                disabled={loadingUpdateControl || !updateControlVersion.trim()}
+                className={`flex-1 ${
+                  loadingUpdateControl || !updateControlVersion.trim()
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700'
+                } text-white py-3 px-4 rounded-lg font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2`}
+              >
+                {loadingUpdateControl ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Enabling...</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-4 h-4" />
+                    <span>Enable Alert</span>
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowUpdateControlModal(false);
+                  setUpdateControlVersion('');
+                }}
+                disabled={loadingUpdateControl}
+                className={`flex-1 ${
+                  loadingUpdateControl ? 'opacity-50 cursor-not-allowed' : ''
+                } bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-white py-3 px-4 rounded-lg font-medium transition-colors`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Software Updates Section */}
+      {ipcRenderer && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <RefreshCw className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Software Updates</h2>
+          </div>
+          
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Current Version</p>
+                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">v{packageJson.version}</p>
+              </div>
+              {updateCheckResult === 'available' && (
+                <span className="flex items-center space-x-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
+                  <Check className="w-4 h-4" />
+                  <span>Update available</span>
+                </span>
+              )}
+              {updateCheckResult === 'up-to-date' && (
+                <span className="flex items-center space-x-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Up to date</span>
+                </span>
+              )}
+              {updateCheckResult === 'error' && (
+                <span className="flex items-center space-x-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-3 py-1 rounded-full">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Check failed</span>
+                </span>
+              )}
+            </div>
+            
+            <div className={`grid ${isAdminEditor ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+              <button
+                onClick={(e) => {
+                  // Debug mode: Ctrl+Shift+Click (Admin only) to trigger mock update notification
+                  if (e.ctrlKey && e.shiftKey && isAdminEditor) {
+                    console.log('🐛 Debug mode: Triggering mock update installer with CMD UI');
+                    showToast('🐛 Debug: Opening mock update installer...', 'info');
+                    // Dispatch custom event for UpdateNotification component
+                    const mockInfo = {
+                      version: '999.9.9',
+                      releaseNotes: 'Debug update to preview the CMD-style installer UI',
+                      releaseDate: new Date().toISOString()
+                    };
+                    const event = new CustomEvent('mock-update-available', { detail: mockInfo });
+                    window.dispatchEvent(event);
+                    return;
+                  }
+                  
+                  // Normal update check
+                  setCheckingUpdate(true);
+                  setUpdateCheckResult(null);
+                  console.log('🔍 Manual update check triggered');
+                  showToast('Checking for updates...', 'info');
+                  // Clear localStorage snooze if exists
+                  localStorage.removeItem('update_snooze_until');
+                  // Force update check via IPC
+                  ipcRenderer.send('check-for-updates');
+                  // Auto-reset after 15 seconds if no response
+                  setTimeout(() => {
+                    if (checkingUpdate) {
+                      setCheckingUpdate(false);
+                      setUpdateCheckResult('error');
+                    }
+                  }, 15000);
+                }}
+                disabled={checkingUpdate}
+                className={`py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
+                  checkingUpdate
+                    ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed text-gray-600 dark:text-gray-400'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg'
+                }`}
+              >
+                <RefreshCw className={`w-5 h-5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+                <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+              </button>
+              
+              {isAdminEditor && (
+                <button
+                  onClick={handleUpdateControlToggle}
+                  disabled={loadingUpdateControl}
+                  className={`py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 ${
+                    updateControlEnabled
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md hover:shadow-lg'
+                      : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white shadow-md hover:shadow-lg'
+                  } ${loadingUpdateControl ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {updateControlEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                  <span>{loadingUpdateControl ? 'Loading...' : updateControlEnabled ? 'Disable Alert' : 'Alert Users'}</span>
+                </button>
+              )}
+            </div>
+            
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-center">
+              {isAdminEditor ? '💡 Admin: Hold Ctrl+Shift on "Check" to preview UI • Use "Alert Users" to force update notification' : 'Checks GitHub for new releases'}
+            </p>
           </div>
         </div>
       )}

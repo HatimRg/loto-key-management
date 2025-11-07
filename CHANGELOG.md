@@ -7,15 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.7.2] - 2025-01-08
+## [1.7.4] - 2025-01-08
+
+### ✨ Features
+- **Admin Update Control System**
+  - New "Alert Users" toggle in Settings (Admin only)
+  - Force update notifications to all users via Supabase
+  - Admin can specify version number (no strict validation)
+  - All users see notification on app launch when enabled
+  - Automatic update check triggered when alert is active
+  - New Supabase table: `update_control` (see `supabase-update-control.sql`)
+  
+- **Modern CMD-Style Update Installer**
+  - Fullscreen terminal interface with real-time installation logs
+  - Progress bars with visual feedback during download
+  - Automatic countdown (3 seconds) before app restart
+  - Color-coded log messages (success, error, warning, info, progress)
+  - Auto-scrolling terminal output
+  - Admin debug mode: Ctrl+Shift+Click to preview installer UI with mock data
 
 ### 🔧 Technical Improvements
-- **Enhanced Auto-Update Debugging**
-  - Added manual "Check for Updates" button in About/Settings page
+- **Enhanced Auto-Update System**
+  - Moved update check to Settings page for better accessibility
+  - Added manual "Check for Updates" button with real-time feedback
+  - Status badges: "Update available", "Up to date", "Check failed"
+  - Toast notifications for all update check results
   - Improved update check logging with feed URL and current version display
   - Added IPC handler for manual update checks
   - Clears localStorage snooze when manually checking for updates
-  - Better error reporting for update failures
+  - Better error reporting with 15-second timeout
 
 ### 🐛 Fixed
 - **Auto-Updater Configuration**
