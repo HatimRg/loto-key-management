@@ -6,6 +6,10 @@ console.log('[Preload] Script loaded successfully');
 try {
   // Expose ipcRenderer to the renderer process
   contextBridge.exposeInMainWorld('ipcRenderer', {
+    send: (channel, ...args) => {
+      console.log(`[Preload] IPC send: ${channel}`, args);
+      return ipcRenderer.send(channel, ...args);
+    },
     invoke: (channel, ...args) => {
       console.log(`[Preload] IPC invoke: ${channel}`, args);
       return ipcRenderer.invoke(channel, ...args);

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import db from '../utils/database';
+import VisitorWalkthrough from './VisitorWalkthrough';
 // syncManager removed - local database only
 import {
   Home,
@@ -20,7 +21,9 @@ import {
   WifiOff,
   Menu,
   X,
-  Cloud
+  Cloud,
+  Bell,
+  HelpCircle
 } from 'lucide-react';
 
 function Layout({ children }) {
@@ -28,11 +31,74 @@ function Layout({ children }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [updateSnoozed, setUpdateSnoozed] = useState(false);
+  const [snoozedUpdateInfo, setSnoozedUpdateInfo] = useState(null);
   // syncing state removed - no cloud sync
 
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  // Listen for update events
+  useEffect(() => {
+    const handleUpdateAvailable = (event) => {
+      console.log('🔔 Update available - showing header indicator');
+      setUpdateSnoozed(true);
+      setSnoozedUpdateInfo(event.detail?.updateInfo);
+    };
+
+    const handleUpdateSnoozed = (event) => {
+      console.log('🔔 Update snoozed - showing header indicator');
+      setUpdateSnoozed(true);
+      setSnoozedUpdateInfo(event.detail?.updateInfo);
+    };
+
+    const handleUpdateDismissed = () => {
+      console.log('✖️ Update dismissed - removing header indicator');
+      setUpdateSnoozed(false);
+      setSnoozedUpdateInfo(null);
+    };
+
+    window.addEventListener('update-available', handleUpdateAvailable);
+    window.addEventListener('update-snoozed', handleUpdateSnoozed);
+    window.addEventListener('update-dismissed', handleUpdateDismissed);
+
+    // Check if already snoozed on mount
+    const snoozeUntil = localStorage.getItem('update_snooze_until');
+    if (snoozeUntil) {
+      const now = Date.now();
+      const snoozeTime = parseInt(snoozeUntil, 10);
+      if (now < snoozeTime) {
+        setUpdateSnoozed(true);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('update-available', handleUpdateAvailable);
+      window.removeEventListener('update-snoozed', handleUpdateSnoozed);
+      window.removeEventListener('update-dismissed', handleUpdateDismissed);
+    };
+  }, []);
+
+  const handleSnoozeClick = () => {
+    console.log('🔔 Update indicator clicked - showing update notification');
+    // Clear the snooze
+    localStorage.removeItem('update_snooze_until');
+    setUpdateSnoozed(false);
+    setSnoozedUpdateInfo(null);
+    // Trigger event to show the update notification UI directly
+    window.dispatchEvent(new CustomEvent('show-update-notification', {
+      detail: { updateInfo: snoozedUpdateInfo }
+    }));
+  };
+
+  const handleStartWalkthrough = () => {
+    console.log('🎓 Starting walkthrough from button');
+    // Clear completion flag so walkthrough can restart
+    localStorage.removeItem('visitor_walkthrough_completed');
+    window.dispatchEvent(new Event('restart-walkthrough'));
+    showToast('🎓 Démarrage de la visite guidée...', 'info');
   };
 
   // handleForceSync removed - local database only mode
@@ -91,16 +157,16 @@ function Layout({ children }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4">
+        <nav className="flex-1 overflow-y-auto py-4" data-tour="nav-sidebar">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center space-x-3 px-4 py-3 mx-2 rounded-lg transition-colors ${
+                `flex items-center space-x-3 px-4 py-2 mx-2 rounded-lg transition-all duration-200 ${
                   isActive
                     ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:scale-105 hover:shadow-sm'
                 }`
               }
               title={!sidebarOpen ? item.label : ''}
@@ -115,6 +181,7 @@ function Layout({ children }) {
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
           <button
             onClick={toggleDarkMode}
+            data-tour="theme-toggle"
             className="flex items-center space-x-3 w-full px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
             title={!sidebarOpen ? (darkMode ? 'Light Mode' : 'Dark Mode') : ''}
           >
@@ -164,6 +231,33 @@ function Layout({ children }) {
               </h2>
             </div>
             <div className="flex items-center space-x-4">
+              {/* Walkthrough Button - Visible for Visitor and RestrictedEditor */}
+              {(userMode === 'Visitor' || userMode === 'RestrictedEditor') && (
+                <button
+                  onClick={handleStartWalkthrough}
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 
+                  rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-all duration-200 hover:scale-105"
+                  title="Démarrer la visite guidée"
+                  data-tour="help-button"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="text-sm font-medium hidden lg:inline">Aide</span>
+                </button>
+              )}
+              
+              {/* Update Snoozed Indicator */}
+              {updateSnoozed && (
+                <button
+                  onClick={handleSnoozeClick}
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 
+                  rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-all duration-200 animate-pulse"
+                  title="Update available - Click to view"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span className="text-sm font-medium hidden lg:inline">Update Available</span>
+                </button>
+              )}
+              
               {/* Signal Strength Icon - Full bars when online, empty bars with cross when offline */}
               <div className="flex items-center space-x-2 select-none" title={isOnline ? 'Connected to Cloud' : 'Offline - Using Cached Data'}>
                 {isOnline ? (
@@ -180,7 +274,7 @@ function Layout({ children }) {
               </div>
 
               {/* User Badge */}
-              <div className={`px-3 py-1 rounded-full text-sm font-medium select-none ${
+              <div data-tour="user-mode-badge" className={`px-3 py-1 rounded-full text-sm font-medium select-none ${
                 userMode === 'Editor' 
                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' 
                   : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
@@ -206,6 +300,9 @@ function Layout({ children }) {
           {children}
         </div>
       </main>
+      
+      {/* Visitor Walkthrough */}
+      <VisitorWalkthrough userMode={userMode} />
     </div>
   );
 }

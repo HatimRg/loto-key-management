@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, Moon, Sun, Wifi, WifiOff, Download, Upload, Trash2, User, X, Database, Save, Info, Edit2, CheckCircle, Wrench, RefreshCw, AlertTriangle, Check, AlertCircle, Bell, BellOff } from 'lucide-react';
+import { Settings as SettingsIcon, Moon, Sun, Wifi, WifiOff, Download, Upload, Trash2, User, X, Database, Save, Info, Edit2, CheckCircle, Wrench, RefreshCw, AlertTriangle, Check, AlertCircle, Bell, BellOff, Play, RotateCcw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Footer from '../components/Footer';
 import db from '../utils/database';
 import { useToast } from '../context/ToastContext';
 import packageJson from '../../package.json';
-import { nukeAllOperationalData } from '../utils/nukeHelper';
+import { nukeAllOperationalData, nukeSelectedTables } from '../utils/nukeHelper';
 import { APP_CONFIG } from '../utils/constants';
 import logger from '../utils/logger';
 import { downloadActivityLog } from '../utils/downloadHelper';
@@ -38,12 +38,10 @@ function Settings() {
   const { showToast } = useToast();
   const isAdminEditor = userMode === 'AdminEditor';
   const isRestricted = userMode === 'RestrictedEditor';
+  const updateCheckTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     ADMIN_ACCESS_CODE: '010203',
-    RESTRICTED_ACCESS_CODE: 'sgtm123',
-    SUPABASE_URL: '',
-    SUPABASE_KEY: '',
-    AUTO_SYNC_ENABLED: true
+    RESTRICTED_ACCESS_CODE: 'sgtm123'
   });
   const [appInfo, setAppInfo] = useState({
     name: APP_CONFIG.name,
@@ -61,6 +59,14 @@ function Settings() {
   const [nukeCode, setNukeCode] = useState('');
   const [nukeError, setNukeError] = useState('');
   const [isNuking, setIsNuking] = useState(false);
+  const [nukeTables, setNukeTables] = useState({
+    breakers: true,
+    locks: true,
+    personnel: true,
+    plans: true,
+    history: true,
+    sync_queue: true
+  });
   const [saveMessage, setSaveMessage] = useState('');
   const [paths, setPaths] = useState(null);
   const [dependencies, setDependencies] = useState(null);
@@ -83,10 +89,7 @@ function Settings() {
     if (config) {
       setFormData({ 
         ADMIN_ACCESS_CODE: config.ADMIN_ACCESS_CODE || config.ACCESS_CODE || '010203',
-        RESTRICTED_ACCESS_CODE: config.RESTRICTED_ACCESS_CODE || 'sgtm123',
-        SUPABASE_URL: config.SUPABASE_URL || 'https://qrjkgvglorotucerfspt.supabase.co',
-        SUPABASE_KEY: config.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyamtndmdsb3JvdHVjZXJmc3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwOTAwNDcsImV4cCI6MjA3NzY2NjA0N30.6zdPTeIIWN_uQc-SPEYkHLmaGIUY-42c3mOTqdycfok',
-        AUTO_SYNC_ENABLED: config.AUTO_SYNC_ENABLED !== undefined ? config.AUTO_SYNC_ENABLED : true
+        RESTRICTED_ACCESS_CODE: config.RESTRICTED_ACCESS_CODE || 'sgtm123'
       });
     }
     loadPaths();
@@ -96,52 +99,75 @@ function Settings() {
     loadUpdateControlState();
     
     // Listen for update check results
+    // NOTE: Only listen to update-not-available here
+    // UpdateNotification.js handles update-available and update-error to show popup
     if (ipcRenderer) {
-      const handleUpdateAvailable = (event, info) => {
-        console.log('✅ Update available:', info);
-        setUpdateCheckResult('available');
-        setCheckingUpdate(false);
-        showToast(`Update available: v${info.version}`, 'success');
-      };
-      
       const handleUpdateNotAvailable = () => {
         console.log('✅ App is up to date');
+        if (updateCheckTimeoutRef.current) {
+          clearTimeout(updateCheckTimeoutRef.current);
+          updateCheckTimeoutRef.current = null;
+        }
         setUpdateCheckResult('up-to-date');
         setCheckingUpdate(false);
         showToast('You are running the latest version', 'success');
       };
       
-      const handleUpdateError = (event, error) => {
-        console.error('❌ Update check failed:', error);
-        setUpdateCheckResult('error');
+      // Listen for update available (for UI state only, UpdateNotification shows popup)
+      const handleUpdateAvailable = (event, info) => {
+        console.log('✅ Update available (Settings UI state):', info);
+        if (updateCheckTimeoutRef.current) {
+          clearTimeout(updateCheckTimeoutRef.current);
+          updateCheckTimeoutRef.current = null;
+        }
+        setUpdateCheckResult('available');
         setCheckingUpdate(false);
-        showToast('Failed to check for updates. Check your internet connection.', 'error');
+        // Don't show toast - UpdateNotification will show popup
       };
       
-      ipcRenderer.on('update-available', handleUpdateAvailable);
+      const handleUpdateError = (event, error) => {
+        console.error('❌ Update check failed:', error);
+        if (updateCheckTimeoutRef.current) {
+          clearTimeout(updateCheckTimeoutRef.current);
+          updateCheckTimeoutRef.current = null;
+        }
+        setUpdateCheckResult('error');
+        setCheckingUpdate(false);
+        // Don't show toast if UpdateNotification is handling it
+      };
+      
       ipcRenderer.on('update-not-available', handleUpdateNotAvailable);
+      ipcRenderer.on('update-available', handleUpdateAvailable);
       ipcRenderer.on('update-error', handleUpdateError);
       
       return () => {
-        ipcRenderer.removeListener('update-available', handleUpdateAvailable);
+        // Clear timeout on unmount
+        if (updateCheckTimeoutRef.current) {
+          clearTimeout(updateCheckTimeoutRef.current);
+          updateCheckTimeoutRef.current = null;
+        }
+        
         ipcRenderer.removeListener('update-not-available', handleUpdateNotAvailable);
+        ipcRenderer.removeListener('update-available', handleUpdateAvailable);
         ipcRenderer.removeListener('update-error', handleUpdateError);
       };
     }
   }, [config]);
 
   const loadUpdateControlState = async () => {
-    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) return;
+    // Hardcoded Supabase credentials
+    const supabaseUrl = 'https://qrjkgvglorotucerfspt.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyamtndmdsb3JvdHVjZXJmc3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwOTAwNDcsImV4cCI6MjA3NzY2NjA0N30.6zdPTeIIWN_uQc-SPEYkHLmaGIUY-42c3mOTqdycfok';
     
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
+      // Simple: Just get the row with id=1 (only one row exists)
       const { data, error } = await supabase
         .from('update_control')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', 1)
         .single();
       
       if (error && error.code !== 'PGRST116') {
@@ -169,10 +195,9 @@ function Settings() {
   };
 
   const enableUpdateControl = async () => {
-    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) {
-      showToast('❌ Supabase not configured', 'error');
-      return;
-    }
+    // Hardcoded Supabase credentials
+    const supabaseUrl = 'https://qrjkgvglorotucerfspt.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyamtndmdsb3JvdHVjZXJmc3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwOTAwNDcsImV4cCI6MjA3NzY2NjA0N30.6zdPTeIIWN_uQc-SPEYkHLmaGIUY-42c3mOTqdycfok';
     
     if (!updateControlVersion.trim()) {
       showToast('❌ Please enter a version number', 'error');
@@ -183,38 +208,19 @@ function Settings() {
     
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
-      // Get the existing row or create new one
-      const { data: existing } = await supabase
+      // Simple: Just update the row with id=1 (only one row exists)
+      const { error } = await supabase
         .from('update_control')
-        .select('id')
-        .limit(1)
-        .single();
+        .update({
+          is_update_available: true,
+          version_number: updateControlVersion.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1);
       
-      if (existing) {
-        // Update existing
-        const { error } = await supabase
-          .from('update_control')
-          .update({
-            is_update_available: true,
-            version_number: updateControlVersion.trim(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-        
-        if (error) throw error;
-      } else {
-        // Insert new
-        const { error } = await supabase
-          .from('update_control')
-          .insert({
-            is_update_available: true,
-            version_number: updateControlVersion.trim()
-          });
-        
-        if (error) throw error;
-      }
+      if (error) throw error;
       
       setUpdateControlEnabled(true);
       setShowUpdateControlModal(false);
@@ -232,34 +238,26 @@ function Settings() {
   };
 
   const disableUpdateControl = async () => {
-    if (!config?.SUPABASE_URL || !config?.SUPABASE_KEY) {
-      showToast('❌ Supabase not configured', 'error');
-      return;
-    }
+    // Hardcoded Supabase credentials
+    const supabaseUrl = 'https://qrjkgvglorotucerfspt.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyamtndmdsb3JvdHVjZXJmc3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIwOTAwNDcsImV4cCI6MjA3NzY2NjA0N30.6zdPTeIIWN_uQc-SPEYkHLmaGIUY-42c3mOTqdycfok';
     
     setLoadingUpdateControl(true);
     
     try {
       const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_KEY);
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
-      const { data: existing } = await supabase
+      // Simple: Just update the row with id=1 (only one row exists)
+      const { error } = await supabase
         .from('update_control')
-        .select('id')
-        .limit(1)
-        .single();
+        .update({
+          is_update_available: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1);
       
-      if (existing) {
-        const { error } = await supabase
-          .from('update_control')
-          .update({
-            is_update_available: false,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-        
-        if (error) throw error;
-      }
+      if (error) throw error;
       
       setUpdateControlEnabled(false);
       setUpdateControlVersion('');
@@ -382,16 +380,16 @@ function Settings() {
     // Clear any previous errors
     setNukeError('');
 
-    // Final confirmation
-    if (!window.confirm('⚠️ FINAL WARNING: This will delete ALL data including breakers, locks, personnel, plans, and files. You will have 5 seconds to undo. Are you absolutely sure?')) {
-      setShowNukeModal(false);
-      setNukeCode('');
+    // Check if at least one table is selected
+    const hasSelection = Object.values(nukeTables).some(v => v);
+    if (!hasSelection) {
+      setNukeError('Please select at least one table to delete');
       return;
     }
 
-    // Start nuking process
+    // Start nuking process (no second confirmation needed)
     setIsNuking(true);
-    console.log('Starting nuke operation...');
+    console.log('Starting selective nuke operation...', nukeTables);
 
     if (!ipcRenderer) {
       console.error('IPC Renderer not available');
@@ -401,9 +399,8 @@ function Settings() {
     }
 
     try {
-      // Use new nuke helper that syncs to Supabase
-      console.log('Starting cloud-synced nuke operation...');
-      const result = await nukeAllOperationalData();
+      // Use selective nuke helper
+      const result = await nukeSelectedTables(nukeTables);
       console.log('Nuke result:', result);
       
       if (!result.success) {
@@ -420,23 +417,42 @@ function Settings() {
       setNukeCode('');
       setNukeError('');
       setIsNuking(false);
+      // Reset toggles to all selected for next time
+      setNukeTables({
+        breakers: true,
+        locks: true,
+        personnel: true,
+        plans: true,
+        history: true,
+        sync_queue: true
+      });
       
       // Show success toast
+      const deletedTables = Object.entries(nukeTables)
+        .filter(([_, selected]) => selected)
+        .map(([name]) => name)
+        .join(', ');
       showToast(
-        'All operational data has been cleared from both local database and Supabase. Profile and settings preserved.',
+        `Selected data cleared: ${deletedTables}. Refreshing app...`,
         'success',
-        5000
+        3000
       );
       
-      // Wait a moment then finalize (delete physical files)
+      // Wait a moment then finalize and reload
       setTimeout(async () => {
         try {
           if (ipcRenderer) {
             await ipcRenderer.invoke('finalize-nuke');
             console.log('✅ Physical files cleaned up');
           }
+          
+          // Force full app reload to clear all cached data
+          console.log('🔄 Reloading app to refresh data...');
+          window.location.reload();
         } catch (error) {
           console.error('❌ Finalize error:', error);
+          // Still reload even if finalize fails
+          window.location.reload();
         }
       }, 2000);
       
@@ -514,55 +530,6 @@ function Settings() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Can edit Breakers, Locks, Personnel, and Plans but cannot modify Cloud Sync, Settings, or About Me
               </p>
-            </div>
-
-            {/* Supabase Configuration */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-              <h3 className="text-md font-semibold text-gray-800 dark:text-white mb-4 flex items-center space-x-2">
-                <Database className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <span>Supabase Configuration</span>
-              </h3>
-              
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Supabase URL
-                </label>
-                <input
-                  type="text"
-                  value={formData.SUPABASE_URL}
-                  onChange={(e) => setFormData({...formData, SUPABASE_URL: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
-                  placeholder="https://your-project.supabase.co"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Supabase Anon Key
-                </label>
-                <textarea
-                  value={formData.SUPABASE_KEY}
-                  onChange={(e) => setFormData({...formData, SUPABASE_KEY: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-xs"
-                  rows="3"
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.AUTO_SYNC_ENABLED}
-                    onChange={(e) => setFormData({...formData, AUTO_SYNC_ENABLED: e.target.checked})}
-                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Enable Auto-Sync</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Automatically sync data changes to Supabase cloud</p>
-                  </div>
-                </label>
-              </div>
             </div>
 
             <div className="flex items-center space-x-3">
@@ -659,6 +626,55 @@ function Settings() {
         </button>
       </div>
 
+      {/* Walkthrough Guide - Visitor and RestrictedEditor */}
+      {(userMode === 'visitor' || userMode === 'RestrictedEditor') && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            {userMode === 'visitor' ? (
+              <RotateCcw className="w-5 h-5 text-green-600 dark:text-green-400" />
+            ) : (
+              <Play className="w-5 h-5 text-green-600 dark:text-green-400" />
+            )}
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Visite Guidée</h2>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {userMode === 'visitor' 
+              ? 'Redémarrer la visite guidée pour revoir toutes les fonctionnalités de l\'application.' 
+              : 'Lancer la visite guidée pour découvrir toutes les fonctionnalités de l\'application.'}
+          </p>
+          <button
+            onClick={() => {
+              if (userMode === 'visitor') {
+                // Visitor: Clear localStorage and reload
+                localStorage.removeItem('visitor_walkthrough_completed');
+                showToast('✓ Visite guidée redémarrée! Rechargez la page pour commencer.', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+              } else {
+                // RestrictedEditor: Dispatch event to start tour immediately
+                localStorage.removeItem('visitor_walkthrough_completed');
+                showToast('✓ Visite guidée démarrée!', 'success');
+                setTimeout(() => {
+                  window.dispatchEvent(new Event('start-restricted-tour'));
+                }, 500);
+              }
+            }}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            {userMode === 'visitor' ? (
+              <>
+                <RotateCcw className="w-4 h-4" />
+                <span>Redémarrer la Visite</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                <span>Démarrer la Visite</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Maintenance Tools - Admin Editor Only */}
       {isAdminEditor && !isRestricted && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
@@ -744,35 +760,78 @@ function Settings() {
 
       {/* Nuke Confirmation Modal */}
       {showNukeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 border-4 border-red-500">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 border-4 border-red-500 animate-scaleIn">
             <div className="flex items-center space-x-2 mb-4">
               <AlertTriangle className="w-8 h-8 text-red-600" />
               <h2 className="text-xl font-bold text-red-600 dark:text-red-400">⚠️ DANGER ZONE ⚠️</h2>
             </div>
             
-            <div className="mb-4 p-4 bg-red-100 dark:bg-red-900 dark:bg-opacity-30 rounded-lg">
-              <p className="text-sm text-red-800 dark:text-red-300 font-semibold mb-2">
-                This will permanently delete:
-              </p>
-              <ul className="text-sm text-red-700 dark:text-red-400 list-disc list-inside space-y-1">
-                <li>All breakers and their history</li>
-                <li>All locks inventory</li>
-                <li>All personnel records</li>
-                <li>All electrical plans</li>
-                <li>All PDF certificates and files</li>
-                <li>All audit logs</li>
-              </ul>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 font-semibold">
+              Select which tables to delete:
+            </p>
+
+            {/* All Toggle */}
+            <div className="mb-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-gray-300 dark:border-gray-600">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Object.values(nukeTables).every(v => v)}
+                  onChange={(e) => {
+                    const allSelected = e.target.checked;
+                    setNukeTables({
+                      breakers: allSelected,
+                      locks: allSelected,
+                      personnel: allSelected,
+                      plans: allSelected,
+                      history: allSelected,
+                      sync_queue: allSelected
+                    });
+                  }}
+                  className="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <span className="text-sm font-bold text-gray-900 dark:text-white">Select All Tables</span>
+              </label>
             </div>
 
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 font-semibold">
-              This action CANNOT be undone!
+            {/* Individual Table Toggles */}
+            <div className="mb-4 space-y-2 max-h-64 overflow-y-auto">
+              {[
+                { key: 'breakers', label: 'Breakers', desc: 'All breakers and their history' },
+                { key: 'locks', label: 'Lock Inventory', desc: 'Reset lock inventory count to 0' },
+                { key: 'personnel', label: 'Personnel', desc: 'All personnel records and certificates' },
+                { key: 'plans', label: 'Electrical Plans', desc: 'All electrical plan PDFs' },
+                { key: 'history', label: 'Audit History', desc: 'All activity logs' },
+                { key: 'sync_queue', label: 'Sync Queue', desc: 'Pending cloud sync operations' }
+              ].map(({ key, label, desc }) => (
+                <div key={key} className="p-3 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 rounded-lg border border-red-200 dark:border-red-800">
+                  <label className="flex items-start space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={nukeTables[key]}
+                      onChange={(e) => setNukeTables({ ...nukeTables, [key]: e.target.checked })}
+                      className="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500 mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-red-800 dark:text-red-300">{label}</span>
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{desc}</p>
+                    </div>
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 font-semibold text-center">
+              ⚠️ This action CANNOT be undone!
             </p>
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Enter Editor Access Code to confirm:
+                Enter Admin Access Code to START DELETION:
               </label>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                ⚠️ Clicking "Delete Selected Tables" will immediately start the deletion process
+              </p>
               <input
                 type="password"
                 value={nukeCode}
@@ -781,8 +840,7 @@ function Settings() {
                   setNukeError('');
                 }}
                 className="w-full px-3 py-2 border-2 border-red-300 dark:border-red-700 rounded-lg focus:ring-2 focus:ring-red-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter access code"
-                autoFocus
+                placeholder="Enter admin code"
               />
               {nukeError && (
                 <p className="text-sm text-red-600 dark:text-red-400 mt-2">{nukeError}</p>
@@ -795,13 +853,22 @@ function Settings() {
                 disabled={isNuking}
                 className={`flex-1 ${isNuking ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white py-2 rounded-lg font-medium transition-colors`}
               >
-                {isNuking ? 'Deleting...' : 'Yes, Delete Everything'}
+                {isNuking ? 'Deleting...' : 'Delete Selected Tables'}
               </button>
               <button
                 onClick={() => {
                   setShowNukeModal(false);
                   setNukeCode('');
                   setNukeError('');
+                  // Reset toggles to all selected for next time
+                  setNukeTables({
+                    breakers: true,
+                    locks: true,
+                    personnel: true,
+                    plans: true,
+                    history: true,
+                    sync_queue: true
+                  });
                 }}
                 disabled={isNuking}
                 className={`flex-1 ${isNuking ? 'opacity-50 cursor-not-allowed' : ''} bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-900 dark:text-white py-2 rounded-lg font-medium transition-colors`}
@@ -951,14 +1018,25 @@ function Settings() {
                   showToast('Checking for updates...', 'info');
                   // Clear localStorage snooze if exists
                   localStorage.removeItem('update_snooze_until');
-                  // Force update check via IPC
-                  ipcRenderer.send('check-for-updates');
+                  // Force update check via IPC - use window.ipcRenderer directly
+                  if (window.ipcRenderer && window.ipcRenderer.send) {
+                    window.ipcRenderer.send('check-for-updates');
+                  } else {
+                    console.error('❌ ipcRenderer.send not available');
+                    showToast('Update check failed - IPC not available', 'error');
+                    setCheckingUpdate(false);
+                    return;
+                  }
                   // Auto-reset after 15 seconds if no response
-                  setTimeout(() => {
-                    if (checkingUpdate) {
-                      setCheckingUpdate(false);
-                      setUpdateCheckResult('error');
-                    }
+                  // Clear any existing timeout
+                  if (updateCheckTimeoutRef.current) {
+                    clearTimeout(updateCheckTimeoutRef.current);
+                  }
+                  updateCheckTimeoutRef.current = setTimeout(() => {
+                    setCheckingUpdate(false);
+                    setUpdateCheckResult('error');
+                    showToast('Update check timed out', 'error');
+                    updateCheckTimeoutRef.current = null;
                   }, 15000);
                 }}
                 disabled={checkingUpdate}

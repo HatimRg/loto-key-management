@@ -18,7 +18,7 @@ try {
   } catch (err2) {
     // Ultimate fallback
     packageJson = {
-      version: '1.7.4',
+      version: '1.8.5',
       description: 'LOTO Key Management System'
     };
   }
@@ -66,6 +66,44 @@ autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.logger = require('electron-log');
 autoUpdater.logger.transports.file.level = 'info';
 
+// Auto-updater event handlers
+autoUpdater.on('update-available', (info) => {
+  console.log('✅ Update available:', info.version);
+  pendingUpdateInfo = info; // Store for later
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('update-available', info);
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  console.log('ℹ️ No update available');
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('update-not-available', info);
+  }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('download-progress', progressObj);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('✅ Update downloaded, ready to install');
+  isDownloading = false;
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('update-downloaded', info);
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('❌ Update error:', err);
+  isDownloading = false;
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('update-error', err.message || 'Update failed');
+  }
+});
+
 // Set update feed URL directly (so we don't need app-update.yml)
 autoUpdater.setFeedURL({
   provider: 'github',
@@ -80,6 +118,8 @@ console.log('🔗 Update repo: github.com/HatimRg/loto-key-management');
 
 let mainWindow;
 let db;
+let pendingUpdateInfo = null; // Store update info to resend when renderer is ready
+let isDownloading = false; // Track download state
 
 // Ensure data directories exist
 log('Setting up paths...');
@@ -291,6 +331,18 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     log('✅ Window ready to show!');
     mainWindow.show();
+    
+    // Resend pending update info after delay to ensure React is fully mounted
+    if (pendingUpdateInfo) {
+      console.log('⏰ Scheduling resend of pending update info');
+      setTimeout(() => {
+        console.log('📤 Resending pending update info to renderer:', pendingUpdateInfo);
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('update-available', pendingUpdateInfo);
+          console.log('✅ Update info resent successfully');
+        }
+      }, 8000); // 8 seconds to ensure React is fully mounted
+    }
   });
 
   // Determine the correct path to index.html
@@ -374,6 +426,9 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', (info) => {
   console.log('✅ App is up to date:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-not-available', info);
+  }
 });
 
 autoUpdater.on('error', (err) => {
@@ -399,7 +454,13 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 // IPC handlers for update actions
-ipcMain.on('check-for-updates', () => {
+ipcMain.on('check-for-updates', (event) => {
+  // Don't check if already downloading
+  if (isDownloading) {
+    console.log('⚠️ Update already downloading, skipping check');
+    return;
+  }
+  
   console.log('🔍 Manual update check requested');
   console.log('📦 Current version:', app.getVersion());
   console.log('📡 Checking: github.com/HatimRg/loto-key-management/releases');
@@ -417,14 +478,56 @@ ipcMain.on('check-for-updates', () => {
     });
 });
 
-ipcMain.on('download-update', () => {
-  console.log('⬇️ User requested update download');
-  autoUpdater.downloadUpdate();
+ipcMain.on('download-update', async (event) => {
+  if (isDownloading) {
+    console.log('⚠️ Download already in progress');
+    return;
+  }
+  
+  console.log('📥 Download update requested');
+  isDownloading = true;
+  try {
+    const result = await autoUpdater.downloadUpdate();
+    console.log('✅ Download started:', result);
+  } catch (err) {
+    console.error('❌ Download error:', err.message);
+    isDownloading = false;
+    if (err.message && err.message.includes('Please check update first')) {
+      console.log('🔄 No update checked yet, checking now...');
+      // If update wasn't checked, check first then download
+      autoUpdater.checkForUpdates()
+        .then(() => {
+          console.log('✅ Check complete, starting download...');
+          setTimeout(() => {
+            isDownloading = true;
+            autoUpdater.downloadUpdate()
+              .catch(downloadErr => {
+                console.error('❌ Download failed after check:', downloadErr);
+                isDownloading = false;
+                if (mainWindow) {
+                  mainWindow.webContents.send('update-error', downloadErr.toString());
+                }
+              });
+          }, 1000);
+        })
+        .catch(checkErr => {
+          console.error('❌ Check failed:', checkErr);
+          if (mainWindow) {
+            mainWindow.webContents.send('update-error', checkErr.toString());
+          }
+        });
+    } else if (mainWindow) {
+      mainWindow.webContents.send('update-error', err.toString());
+    }
+  }
 });
 
 ipcMain.on('install-update', () => {
   console.log('🔄 User requested update installation');
-  autoUpdater.quitAndInstall(false, true);
+  console.log('🔄 Quitting app and launching installer...');
+  // First parameter: isSilent = true (quit without showing dialogs)
+  // Second parameter: isForceRunAfter = true (force run app after update)
+  autoUpdater.quitAndInstall(true, true);
 });
 
 app.whenReady().then(() => {
@@ -461,6 +564,11 @@ app.whenReady().then(() => {
       console.log('📦 Current version:', app.getVersion());
       console.log('🏗️ App is packaged:', app.isPackaged);
       console.log('📡 Checking: github.com/HatimRg/loto-key-management/releases');
+      
+      // Send checking event to renderer for visual feedback
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('checking-for-update');
+      }
       
       autoUpdater.checkForUpdates()
         .then(result => {
@@ -1105,6 +1213,18 @@ ipcMain.handle('check-dependencies', async () => {
     return { success: true, data: dependencies };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// Get app version
+ipcMain.handle('get-app-version', async () => {
+  try {
+    const version = app.getVersion();
+    console.log('📦 IPC: Returning app version:', version);
+    return { success: true, version };
+  } catch (error) {
+    console.error('❌ Error getting app version:', error);
+    return { success: false, error: error.message, version: packageJson.version };
   }
 });
 

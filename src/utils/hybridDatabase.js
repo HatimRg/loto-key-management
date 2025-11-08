@@ -96,25 +96,34 @@ export const initHybridDB = async () => {
 /**
  * Test Supabase connection
  */
-const testConnection = async () => {
+const testConnection = async (force = false) => {
   if (!supabaseClient) return false;
   
   const now = Date.now();
-  // Only test every 30 seconds to avoid spam
-  if (lastConnectionCheck && (now - lastConnectionCheck) < 30000) {
+  // Only test every 30 seconds to avoid spam (unless forced)
+  if (!force && lastConnectionCheck && (now - lastConnectionCheck) < 30000) {
+    console.log('⏭️ Connection test skipped (cached):', !offlineMode);
     return !offlineMode;
   }
 
   try {
+    console.log('🔍 Testing Supabase connection...');
     const { error } = await supabaseClient
       .from('breakers')
       .select('count')
       .limit(1);
     
     lastConnectionCheck = now;
+    const wasOffline = offlineMode;
     offlineMode = !!error;
+    
+    if (wasOffline !== offlineMode) {
+      console.log(`🔄 Connection status changed: ${wasOffline ? 'offline' : 'online'} → ${offlineMode ? 'offline' : 'online'}`);
+    }
+    
     return !error;
   } catch (error) {
+    console.error('❌ Connection test failed:', error);
     lastConnectionCheck = now;
     offlineMode = true;
     return false;
@@ -262,7 +271,14 @@ const writeData = async (table, operation, data) => {
           result = await supabaseClient.from(table).upsert(data).select();
           break;
         case 'delete':
+          console.log(`🗑️ Supabase DELETE: table=${table}, id=${data.id}`);
           result = await supabaseClient.from(table).delete().eq('id', data.id);
+          console.log(`📊 Supabase DELETE result:`, {
+            error: result.error,
+            data: result.data,
+            status: result.status,
+            statusText: result.statusText
+          });
           break;
       }
       
@@ -387,6 +403,7 @@ export default {
   // Status
   isOnline: () => isOnline && !offlineMode,
   isOfflineMode: () => offlineMode,
+  verifyConnection: () => testConnection(true), // Force fresh connection test
   
   // Initialize
   init: initHybridDB,

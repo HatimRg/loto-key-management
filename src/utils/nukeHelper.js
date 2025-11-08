@@ -111,3 +111,124 @@ export const quickNukeLocal = async () => {
     return { success: false, error: error.message };
   }
 };
+
+export const nukeSelectedTables = async (selectedTables) => {
+  try {
+    console.log('🗑️ Starting SELECTIVE nuke operation...', selectedTables);
+    
+    if (!ipcRenderer) {
+      throw new Error('Electron IPC not available');
+    }
+
+    // Force a fresh connection check before bulk operations to avoid stale offline mode
+    console.log('🔍 Verifying cloud connection before bulk delete...');
+    try {
+      const isConnected = await hybridDB.verifyConnection();
+      console.log('☁️ Fresh connection test result:', isConnected ? '✅ Online' : '❌ Offline');
+      if (!isConnected) {
+        console.warn('⚠️ Cloud connection not available - deletions may only affect local database');
+      }
+    } catch (err) {
+      console.warn('⚠️ Connection verification failed, proceeding anyway:', err);
+    }
+
+    // Map table names to their delete operations
+    const tableOperations = {
+      breakers: { getter: hybridDB.getBreakers, deleter: hybridDB.deleteBreaker },
+      personnel: { getter: hybridDB.getPersonnel, deleter: hybridDB.deletePersonnel },
+      plans: { getter: hybridDB.getPlans, deleter: hybridDB.deletePlan }
+    };
+
+    // Delete selected operational tables
+    for (const [tableName, selected] of Object.entries(selectedTables)) {
+      if (!selected) {
+        console.log(`⏭️ Skipping ${tableName} (not selected)`);
+        continue;
+      }
+
+      // Special handling for locks (lock_inventory is a single-row table)
+      if (tableName === 'locks') {
+        console.log('🗑️ Resetting lock inventory...');
+        try {
+          // Reset lock inventory to 0
+          await ipcRenderer.invoke('db-run', 'UPDATE lock_inventory SET total_capacity = 0 WHERE id = 1', []);
+          // Also update in Supabase
+          await hybridDB.updateLockInventory(0);
+          console.log('  ✓ Lock inventory reset to 0');
+        } catch (err) {
+          console.error('  ✗ Failed to reset lock inventory:', err);
+        }
+        continue;
+      }
+
+      if (tableName === 'history') {
+        console.log('🗑️ Clearing history...');
+        await ipcRenderer.invoke('db-run', 'DELETE FROM history', []);
+        continue;
+      }
+
+      if (tableName === 'sync_queue') {
+        console.log('🗑️ Clearing sync queue...');
+        await ipcRenderer.invoke('db-run', 'DELETE FROM sync_queue', []);
+        continue;
+      }
+
+      const operation = tableOperations[tableName];
+      if (!operation) continue;
+
+      try {
+        const result = await operation.getter();
+        
+        if (result.success && result.data && result.data.length > 0) {
+          console.log(`🗑️ Deleting ${result.data.length} records from ${tableName}...`);
+          console.log(`📋 IDs to delete:`, result.data.map(r => r.id));
+          
+          let successCount = 0;
+          let failCount = 0;
+          
+          for (const row of result.data) {
+            try {
+              console.log(`🔄 Attempting to delete ${tableName} id=${row.id}...`);
+              const deleteResult = await operation.deleter(row.id);
+              console.log(`📊 Delete result for id=${row.id}:`, deleteResult);
+              
+              if (deleteResult && deleteResult.success) {
+                successCount++;
+                console.log(`  ✅ Successfully deleted ${tableName} id=${row.id}`);
+              } else {
+                failCount++;
+                console.error(`  ❌ Delete returned false for ${tableName} id=${row.id}`, deleteResult);
+              }
+              
+              // Small delay between deletes to avoid overwhelming Supabase
+              if (result.data.length > 10) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            } catch (err) {
+              failCount++;
+              console.error(`  ❌ Exception deleting ${tableName} id=${row.id}:`, err);
+            }
+          }
+          
+          console.log(`📊 ${tableName} deletion summary: ${successCount} succeeded, ${failCount} failed`);
+        } else {
+          console.log(`  ℹ️ No records in ${tableName}`);
+        }
+      } catch (err) {
+        console.error(`❌ Failed to process ${tableName}:`, err);
+      }
+    }
+    
+    // Vacuum database
+    console.log('🗑️ Vacuuming database...');
+    await ipcRenderer.invoke('db-run', 'VACUUM', []);
+    
+    console.log('✅ Selective nuke operation completed successfully!');
+    
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Selective nuke operation failed:', error);
+    return { success: false, error: error.message };
+  }
+};

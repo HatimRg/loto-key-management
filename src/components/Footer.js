@@ -1,7 +1,8 @@
 import React from 'react';
 import { APP_CONFIG } from '../utils/constants';
 
-function Footer() {
+// ⚡ PERFORMANCE: Memoize Footer to prevent unnecessary re-renders
+const Footer = React.memo(() => {
   return (
     <div className="text-center py-4">
       <a
@@ -19,6 +20,8 @@ function Footer() {
       </a>
     </div>
   );
-}
+});
+
+Footer.displayName = 'Footer';
 
 export default Footer;

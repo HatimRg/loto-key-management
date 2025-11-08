@@ -7,9 +7,10 @@ import db from '../utils/database';
 
 // Memoized StatCard component to prevent flickering
 const StatCard = memo(({ title, value, subtitle, color }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 transition-all duration-300">
-    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{title}</p>
-    <p className={`text-3xl font-bold ${color} transition-all duration-300`}>{value}</p>
+  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 
+  hover-lift transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 cursor-pointer">
+    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 font-medium">{title}</p>
+    <p className={`text-3xl font-bold ${color} transition-all duration-300 hover:scale-105 inline-block`}>{value}</p>
     {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>}
   </div>
 ));
@@ -31,7 +32,8 @@ const ZoneCard = memo(({ zoneData }) => {
   }, [zoneData.breakers]);
 
   return (
-    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-lg transition-all duration-300">
+    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 p-4 rounded-lg 
+    transition-all duration-300 hover:shadow-md hover:scale-[1.02] cursor-pointer">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-3">
           <div className="w-3 h-3 rounded-full bg-red-500"></div>
@@ -341,9 +343,9 @@ function Storage() {
               setShowStorageModal(true);
             } : undefined}
             disabled={!isOnline}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
               isOnline
-                ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                 : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
             }`}
             title={isOnline ? 'Set total storage capacity' : '⚠️ App is offline - Connect to internet to edit'}

@@ -223,7 +223,7 @@ function SupabaseSettings() {
       )}
 
       {/* Configuration Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 mb-6 animate-fadeInUp">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
             <Settings className="w-5 h-5 mr-2" />
@@ -273,7 +273,8 @@ function SupabaseSettings() {
             <div className="flex space-x-3">
               <button
                 onClick={saveConfig}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-200 
+                flex items-center hover:scale-105 hover:shadow-lg"
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Save Configuration
@@ -282,7 +283,8 @@ function SupabaseSettings() {
               <button
                 onClick={handleTestConnection}
                 disabled={isTesting || !config.url || !config.anonKey}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed 
+                text-white rounded-lg transition-all duration-200 flex items-center hover:scale-105 hover:shadow-lg"
               >
                 {isTesting ? (
                   <>
@@ -302,7 +304,7 @@ function SupabaseSettings() {
       </div>
 
       {/* Sync Status Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 mb-6 animate-fadeInUp stagger-1">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center mb-4">
           <RefreshCw className="w-5 h-5 mr-2" />
           Sync Status
@@ -380,7 +382,9 @@ function SupabaseSettings() {
               <button
                 onClick={isOnline && isConnected ? handleSyncEverything : undefined}
                 disabled={isSyncing || isImporting || !isConnected || !isOnline}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all flex items-center justify-center"
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 
+                disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium 
+                transition-all duration-200 flex items-center justify-center hover:scale-105 hover:shadow-lg"
                 title={!isOnline ? '⚠️ App is offline - Connect to internet to sync' : !isConnected ? 'Test connection first' : 'Upload all data to cloud'}
               >
                 {isSyncing ? (
@@ -399,7 +403,9 @@ function SupabaseSettings() {
               <button
                 onClick={isOnline && isConnected ? handleImportFromSupabase : undefined}
                 disabled={isSyncing || isImporting || !isConnected || !isOnline}
-                className="px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all flex items-center justify-center"
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 
+                disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium 
+                transition-all duration-200 flex items-center justify-center hover:scale-105 hover:shadow-lg"
                 title={!isOnline ? '⚠️ App is offline - Connect to internet to sync' : !isConnected ? 'Test connection first' : 'Import all data from cloud'}
               >
                 {isImporting ? (
@@ -420,7 +426,7 @@ function SupabaseSettings() {
       </div>
 
       {/* What Gets Synced */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 animate-fadeInUp stagger-2">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center mb-4">
           <Database className="w-5 h-5 mr-2" />
           What Gets Synced

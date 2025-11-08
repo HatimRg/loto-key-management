@@ -310,9 +310,9 @@ function ElectricalPlans() {
           <button
             onClick={isOnline ? () => setShowModal(true) : undefined}
             disabled={!isOnline}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+            className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
               isOnline
-                ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                 : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
             }`}
             title={isOnline ? 'Upload new electrical plan' : '⚠️ App is offline - Connect to internet to edit the database'}
@@ -324,7 +324,7 @@ function ElectricalPlans() {
       </div>
 
       {/* Plans Grid */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 animate-fadeInUp">
         {plans.length === 0 ? (
           <div className="text-center py-12">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -334,10 +334,12 @@ function ElectricalPlans() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
-            {plans.map((plan) => (
+            {plans.map((plan, index) => (
               <div
                 key={plan.id}
-                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-lg transition-shadow bg-gray-50 dark:bg-gray-700"
+                className={`border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-lg 
+                transition-all duration-200 bg-gray-50 dark:bg-gray-700 animate-fadeInUp stagger-${(index % 6) + 1} 
+                hover:scale-[1.02] hover:border-blue-400 dark:hover:border-blue-500`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2 flex-1 min-w-0">
@@ -365,14 +367,18 @@ function ElectricalPlans() {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleView(plan)}
-                    className="flex-1 px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg flex items-center justify-center space-x-1 text-sm transition-colors"
+                    className="flex-1 px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 
+                    hover:bg-blue-200 dark:hover:bg-blue-800 rounded-lg flex items-center justify-center space-x-1 
+                    text-sm transition-all duration-300 hover:scale-105 hover:shadow-md hover:-translate-y-0.5"
                   >
                     <Eye className="w-4 h-4" />
                     <span>View</span>
                   </button>
                   <button
                     onClick={() => handleDownload(plan)}
-                    className="flex-1 px-3 py-2 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800 rounded-lg flex items-center justify-center space-x-1 text-sm transition-colors"
+                    className="flex-1 px-3 py-2 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 
+                    hover:bg-green-200 dark:hover:bg-green-800 rounded-lg flex items-center justify-center space-x-1 
+                    text-sm transition-all duration-300 hover:scale-105 hover:shadow-md hover:-translate-y-0.5"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download</span>
@@ -400,8 +406,8 @@ function ElectricalPlans() {
 
       {/* Upload Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6 animate-scaleIn">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
               Upload Electrical Plan
             </h2>
@@ -437,7 +443,8 @@ function ElectricalPlans() {
                 <button
                   type="submit"
                   disabled={!selectedFile}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-2 rounded-lg font-medium transition-colors"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed 
+                  text-white py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105"
                 >
                   Upload
                 </button>
@@ -460,8 +467,8 @@ function ElectricalPlans() {
 
       {/* View Modal */}
       {viewingPlan && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-6xl w-full h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-6xl w-full h-[90vh] flex flex-col animate-scaleIn">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div className="flex items-center space-x-2">

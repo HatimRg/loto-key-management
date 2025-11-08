@@ -5,16 +5,23 @@ import Footer from '../components/Footer';
 import db from '../utils/database';
 
 // Memoized StatCard component to prevent unnecessary re-renders
-const StatCard = memo(({ stat }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 transition-all duration-300">
+const StatCard = memo(({ stat, index }) => (
+  <div 
+    className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 
+    hover-lift cursor-pointer transform transition-all duration-300 animate-fadeInUp stagger-${(index % 6) + 1}
+    hover:border-blue-400 dark:hover:border-blue-500`}
+    style={{ animationFillMode: 'both' }}
+  >
     <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{stat.title}</p>
-        <p className={`text-3xl font-bold ${stat.textColor} dark:opacity-90 transition-all duration-300`}>
+      <div className="flex-1">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium transition-colors duration-200">
+          {stat.title}
+        </p>
+        <p className={`text-3xl font-bold ${stat.textColor} dark:opacity-90 transition-all duration-300 hover:scale-105 inline-block`}>
           {stat.value}
         </p>
       </div>
-      <div className={`${stat.color} p-3 rounded-lg`}>
+      <div className={`${stat.color} p-3 rounded-lg transform transition-transform duration-300 hover:rotate-12 hover:scale-110`}>
         <stat.icon className="w-8 h-8 text-white" />
       </div>
     </div>
@@ -70,9 +77,10 @@ const ActivityItem = memo(({ activity, onClick }) => {
   return (
     <div
       onClick={() => onClick(activity)}
-      className="flex items-start space-x-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer transition-colors duration-200"
+      className="flex items-start space-x-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer 
+      transition-all duration-200 transform hover:scale-[1.02] hover:shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-gray-600"
     >
-      <div className={`p-2 rounded-lg ${colorClasses[iconColor]}`}>
+      <div className={`p-2 rounded-lg ${colorClasses[iconColor]} transform transition-transform duration-300 hover:rotate-6 hover:scale-110`}>
         <IconComponent className="w-5 h-5" />
       </div>
       <div className="flex-1 min-w-0">
@@ -374,14 +382,14 @@ function Dashboard() {
         </div>
       )}
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        {statCards.map((stat) => (
-          <StatCard key={stat.title} stat={stat} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6" data-tour="dashboard-stats">
+        {statCards.map((stat, index) => (
+          <StatCard key={stat.title} stat={stat} index={index} />
         ))}
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700" data-tour="dashboard-charts">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-2">
             <Activity className="w-5 h-5 text-gray-600 dark:text-gray-400" />

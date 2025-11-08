@@ -5,6 +5,8 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import Footer from '../components/Footer';
 import ConfirmDialog from '../components/ConfirmDialog';
+import QuickActionsBar from '../components/QuickActionsBar';
+import { useMultiRowSelection } from '../hooks/useMultiRowSelection';
 import db from '../utils/database';
 import { exportToExcel, parseExcelFile, validatePersonnelExcel } from '../utils/excelHelper';
 import { generatePersonnelTemplate, exportFailedRows } from '../utils/importTemplates';
@@ -37,6 +39,17 @@ function Personnel() {
     pdf_path: ''
   });
   const [selectedFile, setSelectedFile] = useState(null);
+  
+  // Multi-row selection hook
+  const {
+    handleRowContextMenu,
+    selectAll,
+    clearSelection,
+    isRowSelected,
+    getSelectedIds,
+    hasSelection,
+    selectionCount,
+  } = useMultiRowSelection();
 
   useEffect(() => {
     loadData();
@@ -163,8 +176,6 @@ function Personnel() {
         return;
       }
 
-      console.log(`📥 Processing ${data.length} personnel rows from Excel...`);
-
       // Validate with new advanced rules
       const validation = validatePersonnelExcel(data);
       
@@ -182,11 +193,6 @@ function Personnel() {
 
       for (let i = 0; i < totalRows; i++) {
         const row = validation.valid[i];
-        
-        // Show progress for large imports
-        if (totalRows > 50 && i % 10 === 0) {
-          console.log(`📊 Progress: ${i}/${totalRows} rows processed...`);
-        }
         
         const personData = {
           name: row.name,
@@ -206,7 +212,6 @@ function Personnel() {
 
         if (isDuplicate) {
           skipped++;
-          console.log(`⊘ Skipped duplicate: ${personData.name} ${personData.lastname}`);
           // Add to failed rows for tracking
           validation.failedRows.push({
             'Row': i + 2,
@@ -225,7 +230,6 @@ function Personnel() {
           const result = await db.addPersonnel(personData);
           if (result.success) {
             imported++;
-            console.log(`✓ Row ${imported}/${totalRows}: ${personData.name} ${personData.lastname}`);
           } else {
             failed++;
             console.error(`✗ Failed to add: ${personData.name}`, result.error);
@@ -241,11 +245,8 @@ function Personnel() {
         }
       }
       
-      console.log(`📊 Final: ${imported} imported, ${skipped} skipped, ${failed} failed out of ${totalRows} total rows`);
-
       // Export failed rows if any
       if (validation.failedRows && validation.failedRows.length > 0) {
-        console.log(`📤 Exporting ${validation.failedRows.length} failed rows...`);
         const exported = await exportFailedRows(validation.failedRows, 'Personnel');
         if (exported) {
           let message = [];
@@ -311,7 +312,6 @@ function Personnel() {
       
       // Upload file to Supabase Storage if new one was selected
       if (selectedFile) {
-        console.log('☁️ Uploading file to Supabase Storage...');
         const saveResult = await saveFileDualWrite(
           `${formData.id_card}_${selectedFile.name}`,
           selectedFile.data,
@@ -320,7 +320,6 @@ function Personnel() {
         
         if (saveResult.success) {
           pdfCloudUrl = saveResult.cloudUrl;
-          console.log('✅ File uploaded to Supabase:', pdfCloudUrl);
         } else {
           console.error('❌ Failed to upload file:', saveResult.error);
           showToast('Failed to upload file: ' + saveResult.error, 'error');
@@ -331,12 +330,9 @@ function Personnel() {
       // Store cloud URL in database
       const personData = { ...formData, pdf_path: pdfCloudUrl };
       
-      console.log('💾 Saving personnel with cloud URL:', pdfCloudUrl);
-      
       if (editingPerson) {
         const result = await db.updatePersonnel(editingPerson.id, personData);
         if (result.success) {
-          console.log('✅ Personnel updated in DATABASE with cloud URL:', pdfCloudUrl);
           // Log to history
           await db.addHistory({
             action: `Updated personnel: ${personData.name} ${personData.lastname}`,
@@ -351,7 +347,6 @@ function Personnel() {
       } else {
         const result = await db.addPersonnel(personData);
         if (result.success) {
-          console.log('✅ Personnel added to DATABASE with cloud URL:', pdfCloudUrl);
           // Log to history
           await db.addHistory({
             action: `Added personnel: ${personData.name} ${personData.lastname}`,
@@ -376,8 +371,6 @@ function Personnel() {
   };
 
   const handleViewPDF = async (pdfPath, personName) => {
-    console.log('📄 Attempting to view PDF:', pdfPath, 'for', personName);
-    
     if (!pdfPath) {
       console.error('❌ No PDF path provided');
       showToast('No PDF available', 'error');
@@ -387,7 +380,6 @@ function Personnel() {
     try {
       // Check if it's a Supabase cloud URL (https://)
       if (pdfPath.startsWith('http://') || pdfPath.startsWith('https://')) {
-        console.log('☁️ Cloud URL detected - opening directly:', pdfPath);
         setViewingPDF({ url: pdfPath, name: personName });
         setShowPDFViewer(true);
         return;
@@ -395,7 +387,6 @@ function Personnel() {
       
       // Check if it's a data URL (browser mode)
       if (pdfPath.startsWith('data:')) {
-        console.log('🌐 Browser mode - using data URL');
         setViewingPDF({ url: pdfPath, name: personName });
         setShowPDFViewer(true);
         return;
@@ -403,11 +394,8 @@ function Personnel() {
       
       // Local file path - read via IPC (Electron)
       if (ipcRenderer) {
-        console.log('💻 Electron mode - reading file via IPC:', pdfPath);
         const result = await ipcRenderer.invoke('read-file', pdfPath);
-        console.log('📥 IPC result:', result);
         if (result.success) {
-          console.log('✅ File read successfully, size:', result.data?.length || 0);
           // Convert base64 to blob (browser-compatible)
           const binaryString = atob(result.data);
           const bytes = new Uint8Array(binaryString.length);
@@ -416,7 +404,6 @@ function Personnel() {
           }
           const blob = new Blob([bytes], { type: 'application/pdf' });
           const url = window.URL.createObjectURL(blob);
-          console.log('✅ PDF blob created, opening viewer');
           setViewingPDF({ url, name: personName });
           setShowPDFViewer(true);
         } else {
@@ -439,7 +426,6 @@ function Personnel() {
     try {
       // Check if it's a Supabase cloud URL
       if (pdfPath.startsWith('http://') || pdfPath.startsWith('https://')) {
-        console.log('☁️ Downloading from cloud URL:', pdfPath);
         const a = document.createElement('a');
         a.href = pdfPath;
         a.download = `certificate_${idCard}.pdf`;
@@ -500,6 +486,40 @@ function Personnel() {
     });
   }, [personnel, searchTerm]);
 
+  // Batch delete handler
+  const handleBatchDelete = async () => {
+    if (!canEdit) {
+      showToast('Non disponible en mode Visiteur', 'error');
+      return;
+    }
+
+    const selectedIds = getSelectedIds();
+    if (selectedIds.length === 0) return;
+
+    if (!window.confirm(`Voulez-vous vraiment supprimer ${selectedIds.length} personne(s) ?`)) {
+      return;
+    }
+
+    try {
+      for (const id of selectedIds) {
+        const person = personnel.find(p => p.id === id);
+        const result = await db.deletePersonnel(id);
+        if (result.success) {
+          await db.addHistory({
+            action: `Deleted personnel: ${person?.name || ''} ${person?.lastname || ''}`,
+            user_mode: userMode,
+            details: `Batch deletion - ID Card: ${person?.id_card || 'N/A'}`
+          });
+        }
+      }
+      showToast(`✓ ${selectedIds.length} personne(s) supprimé(s)`, 'success');
+      loadData();
+      clearSelection();
+    } catch (error) {
+      showToast('Erreur lors de la suppression', 'error');
+    }
+  };
+
   return (
     <div className="space-y-6 relative">
       {/* Loading Overlay - Only on initial load */}
@@ -534,7 +554,7 @@ function Personnel() {
           {/* Export is available to ALL users including Visitor */}
           <button
             onClick={handleExportExcel}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:-translate-y-0.5"
             title="Export personnel data to Excel (without PDFs)"
           >
             <Download className="w-4 h-4" />
@@ -547,12 +567,13 @@ function Personnel() {
               <button
                 onClick={isOnline ? handleDownloadTemplate : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
                   isOnline
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
-                title={isOnline ? 'Download import template with instructions' : '⚠️ App is offline - Connect to internet to edit the database'}
+                title={isOnline ? 'Download Excel template with instructions' : '⚠️ App is offline - Connect to internet to edit the database'}
+                data-tour="download-template-personnel"
               >
                 <FileDown className="w-4 h-4" />
                 <span>Get Template</span>
@@ -560,12 +581,13 @@ function Personnel() {
               <button
                 onClick={isOnline ? () => csvInputRef.current?.click() : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
                   isOnline
-                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
-                title={isOnline ? 'Import personnel from Excel' : '⚠️ App is offline - Connect to internet to edit the database'}
+                title={isOnline ? 'Import personnel from Excel file' : '⚠️ App is offline - Connect to internet to edit the database'}
+                data-tour="import-excel-personnel"
               >
                 <Upload className="w-4 h-4" />
                 <span>Import Excel</span>
@@ -573,12 +595,13 @@ function Personnel() {
               <button
                 onClick={isOnline ? handleAdd : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
                   isOnline
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
-                title={isOnline ? 'Add new personnel' : '⚠️ App is offline - Connect to internet to edit the database'}
+                title={isOnline ? 'Add new personnel member' : '⚠️ App is offline - Connect to internet to edit the database'}
+                data-tour="add-personnel"
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Personnel</span>
@@ -602,8 +625,21 @@ function Personnel() {
         </div>
       </div>
 
+      {/* Quick Actions Bar */}
+      {hasSelection && (
+        <QuickActionsBar
+          selectionCount={selectionCount}
+          onSelectAll={() => selectAll(filteredPersonnel.map(p => p.id))}
+          onClearSelection={clearSelection}
+          onDelete={handleBatchDelete}
+          totalRows={filteredPersonnel.length}
+          showStateActions={false}
+          userMode={userMode}
+        />
+      )}
+
       {/* Personnel Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden" data-tour="personnel-table">
         {filteredPersonnel.length === 0 ? (
           <div className="text-center py-12">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -616,74 +652,112 @@ function Personnel() {
             <table className="w-full table-fixed">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/5">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">ID Card</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/5">Company</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/4">Habilitation / Certificate</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24 sticky right-0 bg-gray-50 dark:bg-gray-700">Actions</th>
+                  {hasSelection && (
+                    <th className="px-4 py-3 w-12"></th>
+                  )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
+                    ID Card
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/5">
+                    Company
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
+                    Habilitation
+                  </th>
+                  {canEdit && (
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredPersonnel.map((person) => (
-                  <tr key={person.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr 
+                    key={person.id} 
+                    className={`transition-colors duration-150 hover:shadow-sm ${
+                      isRowSelected(person.id)
+                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                    onContextMenu={(e) => handleRowContextMenu(e, person.id)}
+                    title="Double clic droit pour sélectionner"
+                  >
+                    {hasSelection && (
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={isRowSelected(person.id)}
+                          onChange={() => handleRowContextMenu({ preventDefault: () => {}, type: 'click' }, person.id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900 dark:text-white truncate">
+                      <div className="font-medium text-gray-900 dark:text-white break-words">
                         {person.name} {person.lastname}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
-                      {person.id_card}
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
+                      {person.id_card || '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
-                      {person.company || '-'}
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 break-words">
+                      {person.company}
                     </td>
-                    <td className="px-6 py-4">
-                      {person.pdf_path ? (
-                        <button
-                          onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
-                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline flex items-center space-x-1"
-                        >
-                          <span>{person.habilitation || 'View Certificate'}</span>
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <span className="text-gray-600 dark:text-gray-300">
-                          {person.habilitation || '-'}
-                        </span>
-                      )}
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 break-words">
+                      {person.habilitation}
                     </td>
-                    <td className="px-6 py-4 sticky right-0 bg-white dark:bg-gray-800">
-                      <div className="flex items-center space-x-2">
-                        {canEdit && (
-                          <>
-                            <button
-                              onClick={isOnline ? () => handleEdit(person) : undefined}
-                              disabled={!isOnline}
-                              className={`p-2 rounded ${
-                                isOnline
-                                  ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer'
-                                  : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
-                              }`}
-                              title={isOnline ? 'Edit person' : '⚠️ App is offline - Connect to internet to edit'}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={isOnline ? () => handleDelete(person.id, person.name, person.lastname) : undefined}
-                              disabled={!isOnline}
-                              className={`p-2 rounded ${
-                                isOnline
-                                  ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer'
-                                  : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
-                              }`}
-                              title={isOnline ? 'Delete person' : '⚠️ App is offline - Connect to internet to edit'}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+                    {canEdit && (
+                      <td className="px-6 py-4 whitespace-nowrap bg-inherit">
+                        <div className="flex items-center space-x-2">
+                          {person.pdf_path && (
+                            <>
+                              <button
+                                onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
+                                className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900 rounded"
+                                title="View certificate"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadPDF(person.pdf_path, person.id_card)}
+                                className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900 rounded"
+                                title="Download certificate"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={isOnline ? () => handleEdit(person) : undefined}
+                            disabled={!isOnline}
+                            className={`p-2 rounded ${
+                              isOnline
+                                ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer'
+                                : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
+                            }`}
+                            title={isOnline ? 'Edit person' : '⚠️ App is offline - Connect to internet to edit'}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={isOnline ? () => handleDelete(person.id, person.name, person.lastname) : undefined}
+                            disabled={!isOnline}
+                            className={`p-2 rounded ${
+                              isOnline
+                                ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer'
+                                : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
+                            }`}
+                            title={isOnline ? 'Delete person' : '⚠️ App is offline - Connect to internet to edit'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

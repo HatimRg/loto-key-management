@@ -5,6 +5,10 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import Footer from '../components/Footer';
 import ConfirmDialog from '../components/ConfirmDialog';
+import QuickActionsBar from '../components/QuickActionsBar';
+import BatchConfirmDialog from '../components/BatchConfirmDialog';
+import { useMultiRowSelection } from '../hooks/useMultiRowSelection';
+import { useDebounce } from '../hooks/useDebounce';
 import db from '../utils/database';
 import { exportToExcel, parseExcelFile, validateBreakerExcel } from '../utils/excelHelper';
 import { generateBreakersTemplate, exportFailedRows } from '../utils/importTemplates';
@@ -25,6 +29,7 @@ function ViewByBreakers() {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 200); // Debounce search for performance
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingBreaker, setEditingBreaker] = useState(null);
@@ -41,6 +46,27 @@ function ViewByBreakers() {
   });
   const [previousCustomLocations, setPreviousCustomLocations] = useState([]);
   const [availableGeneralBreakers, setAvailableGeneralBreakers] = useState([]);
+  
+  // Multi-row selection hook
+  const {
+    handleRowContextMenu,
+    toggleRow, // For checkbox clicks
+    selectAll,
+    clearSelection,
+    isRowSelected,
+    getSelectedIds,
+    hasSelection,
+    selectionCount,
+  } = useMultiRowSelection();
+  
+  // State for batch confirmation dialog
+  const [batchConfirm, setBatchConfirm] = useState({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'warning',
+  });
   
   // Zone -> SubZone mapping
   const zoneSubzoneMap = {
@@ -290,6 +316,144 @@ function ViewByBreakers() {
     }
   };
 
+  // Batch operation handlers
+  const handleBatchDelete = () => {
+    if (!canEdit) {
+      showToast('Non disponible en mode Visiteur', 'error');
+      return;
+    }
+
+    const selectedIds = getSelectedIds();
+    if (selectedIds.length === 0) return;
+
+    // Show custom confirmation dialog
+    setBatchConfirm({
+      show: true,
+      title: 'Confirmer la suppression',
+      message: `Voulez-vous vraiment supprimer ${selectedIds.length} disjoncteur(s) ? Cette action est irréversible.`,
+      type: 'danger',
+      onConfirm: async () => {
+        setBatchConfirm({ ...batchConfirm, show: false });
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        try {
+          // Process all items with error handling for each
+          for (const id of selectedIds) {
+            try {
+              const breaker = breakers.find(b => b.id === id);
+              await db.deleteBreaker(id);
+              await db.addHistory({
+                action: `Deleted breaker: ${breaker?.name || 'Unknown'}`,
+                user_mode: userMode,
+                details: `Batch deletion`
+              });
+              successCount++;
+            } catch (error) {
+              console.error(`Failed to delete breaker ${id}:`, error);
+              failCount++;
+            }
+          }
+          
+          // Show detailed result
+          if (successCount > 0) {
+            showToast(`✓ ${successCount}/${selectedIds.length} disjoncteur(s) supprimé(s)`, 'success');
+          }
+          if (failCount > 0) {
+            showToast(`❌ ${failCount} suppression(s) échouée(s)`, 'error');
+          }
+          
+          loadData();
+          clearSelection();
+        } catch (error) {
+          showToast('Erreur lors de la suppression', 'error');
+        }
+      },
+    });
+  };
+
+  const handleBatchSetState = (newState) => {
+    if (!canEdit) {
+      showToast('Non disponible en mode Visiteur', 'error');
+      return;
+    }
+
+    const selectedIds = getSelectedIds();
+    if (selectedIds.length === 0) return;
+
+    const stateText = newState === 'On' ? 'activer' : 'désactiver';
+    const stateTextPast = newState === 'On' ? 'activé(s)' : 'désactivé(s)';
+    
+    // Show custom confirmation dialog
+    setBatchConfirm({
+      show: true,
+      title: `Confirmer le changement d'état`,
+      message: `Voulez-vous vraiment ${stateText} ${selectedIds.length} disjoncteur(s) ?`,
+      type: 'warning',
+      onConfirm: async () => {
+        setBatchConfirm({ ...batchConfirm, show: false });
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        try {
+          console.log(`🔄 Starting batch update for ${selectedIds.length} breakers to state: ${newState}`);
+          
+          // Process all items with error handling for each
+          for (let i = 0; i < selectedIds.length; i++) {
+            const id = selectedIds[i];
+            try {
+              const breaker = breakers.find(b => b.id === id);
+              console.log(`  ${i + 1}/${selectedIds.length}: Updating breaker ${id} (${breaker?.name})`);
+              
+              const updateResult = await db.updateBreaker(id, { state: newState });
+              
+              if (updateResult.success) {
+                await db.addHistory({
+                  breaker_id: id,
+                  action: `State changed to ${newState}`,
+                  user_mode: userMode,
+                  details: `Batch operation on ${breaker?.name || 'Unknown'}`
+                });
+                successCount++;
+                console.log(`  ✅ Success: ${id}`);
+              } else {
+                console.error(`  ❌ Update failed for ${id}:`, updateResult.error);
+                failCount++;
+              }
+              
+              // Small delay to prevent overwhelming the database
+              if ((i + 1) % 10 === 0 && i < selectedIds.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            } catch (error) {
+              console.error(`  ❌ Exception updating breaker ${id}:`, error);
+              failCount++;
+            }
+          }
+          
+          console.log(`✅ Batch update complete: ${successCount} success, ${failCount} failed`);
+          
+          // Show detailed result
+          if (successCount > 0) {
+            showToast(`✓ ${successCount}/${selectedIds.length} disjoncteur(s) ${stateTextPast}`, 'success');
+          }
+          if (failCount > 0) {
+            showToast(`❌ ${failCount} mise(s) à jour échouée(s)`, 'error');
+          }
+          
+          // Reload data to reflect changes
+          await loadData();
+          clearSelection();
+        } catch (error) {
+          console.error('❌ Batch update error:', error);
+          showToast('Erreur lors de la mise à jour', 'error');
+        }
+      },
+    });
+  };
+
   const handleExportExcel = async () => {
     // Map database fields to import template column names
     const exportData = filteredBreakers.map(breaker => ({
@@ -465,19 +629,20 @@ function ViewByBreakers() {
   };
 
   // Memoize filtered breakers to prevent recalculation on every render
+  // ⚡ PERFORMANCE: Use debounced search term to reduce filtering operations
   const filteredBreakers = useMemo(() => {
     return breakers.filter(breaker => {
       const matchesZone = !selectedZone || breaker.zone === selectedZone;
       const matchesLocation = !selectedLocation || breaker.location === selectedLocation;
       const matchesState = !selectedState || breaker.state === selectedState;
-      const matchesSearch = !searchTerm || 
-        breaker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        breaker.zone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        breaker.location.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !debouncedSearchTerm || 
+        breaker.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        breaker.zone.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        breaker.location.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
       
       return matchesZone && matchesLocation && matchesState && matchesSearch;
     });
-  }, [breakers, selectedZone, selectedLocation, selectedState, searchTerm]);
+  }, [breakers, selectedZone, selectedLocation, selectedState, debouncedSearchTerm]);
 
   const getStateColor = (state) => {
     switch (state) {
@@ -522,7 +687,7 @@ function ViewByBreakers() {
         <div className="flex items-center space-x-3">
           <button
             onClick={handleExportExcel}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-colors"
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center space-x-2 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:-translate-y-0.5"
           >
             <Download className="w-4 h-4" />
             <span>Export Excel</span>
@@ -532,11 +697,12 @@ function ViewByBreakers() {
               <button
                 onClick={isOnline ? handleDownloadTemplate : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-                  isOnline 
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' 
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
+                  isOnline
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
+                data-tour="download-template-breakers"
                 title={isOnline ? 'Download import template with instructions and dropdown menus' : '⚠️ App is offline - Connect to internet to edit the database'}
               >
                 <FileDown className="w-4 h-4" />
@@ -545,11 +711,12 @@ function ViewByBreakers() {
               <button
                 onClick={isOnline ? () => fileInputRef.current?.click() : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-                  isOnline 
-                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer' 
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
+                  isOnline
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
+                data-tour="import-excel-breakers"
                 title={isOnline ? 'Import breakers from Excel' : '⚠️ App is offline - Connect to internet to edit the database'}
               >
                 <Upload className="w-4 h-4" />
@@ -565,12 +732,13 @@ function ViewByBreakers() {
               <button
                 onClick={isOnline ? handleAdd : undefined}
                 disabled={!isOnline}
-                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-                  isOnline 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer' 
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-300 ${
+                  isOnline
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5'
                     : 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed opacity-50'
                 }`}
                 title={isOnline ? 'Add new breaker' : '⚠️ App is offline - Connect to internet to edit the database'}
+                data-tour="add-breaker"
               >
                 <Plus className="w-4 h-4" />
                 <span>Add Breaker</span>
@@ -629,8 +797,23 @@ function ViewByBreakers() {
         </div>
       </div>
 
+      {/* Quick Actions Bar - Appears when rows are selected */}
+      {hasSelection && (
+        <QuickActionsBar
+          selectionCount={selectionCount}
+          onSelectAll={() => selectAll(filteredBreakers.map(b => b.id))}
+          onClearSelection={clearSelection}
+          onDelete={handleBatchDelete}
+          onSetStateOn={() => handleBatchSetState('On')}
+          onSetStateOff={() => handleBatchSetState('Off')}
+          totalRows={filteredBreakers.length}
+          showStateActions={true}
+          userMode={userMode}
+        />
+      )}
+
       {/* Breakers Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden" data-tour="breakers-table">
         {filteredBreakers.length === 0 ? (
           <div className="text-center py-12">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
@@ -643,48 +826,73 @@ function ViewByBreakers() {
             <table className="w-full table-fixed">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Zone</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Subzone</th>
+                  {/* Checkbox column - only visible when rows are selected */}
+                  {hasSelection && (
+                    <th className="px-4 py-3 w-12"></th>
+                  )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/5">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-20">Zone</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-20">Subzone</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-1/6">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-28">State</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">State</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24">Lock Key</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-32">General Breaker</th>
                   {canEdit && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-24 sticky right-0 bg-gray-50 dark:bg-gray-700">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-20">Actions</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-y-gray-200 dark:divide-gray-700">
                 {filteredBreakers.map((breaker) => (
-                  <tr key={breaker.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white truncate">
+                  <tr 
+                    key={breaker.id} 
+                    className={`transition-colors duration-150 hover:shadow-sm ${
+                      isRowSelected(breaker.id)
+                        ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                    onContextMenu={(e) => handleRowContextMenu(e, breaker.id)}
+                    title="Double clic droit pour sélectionner"
+                  >
+                    {/* Checkbox - only visible when selection mode is active */}
+                    {hasSelection && (
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={isRowSelected(breaker.id)}
+                          onChange={() => toggleRow(breaker.id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                          title="Sélectionner/Désélectionner"
+                        />
+                      </td>
+                    )}
+                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white break-words">
                       {breaker.name}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                    <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
                       {breaker.zone}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                    <td className="px-4 py-4 text-gray-600 dark:text-gray-300">
                       {breaker.subzone || '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 break-words">
                       {breaker.location === 'Local Technique' && breaker.special_use 
                         ? `Locale ${breaker.special_use}` 
                         : breaker.location}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStateColor(breaker.state)}`}>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStateColor(breaker.state)}`}>
                         {getStateIcon(breaker.state)} {breaker.state}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
                       {breaker.lock_key || '-'}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 truncate">
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 break-words">
                       {breaker.general_breaker || '-'}
                     </td>
                     {canEdit && (
-                      <td className="px-6 py-4 sticky right-0 bg-white dark:bg-gray-800">
+                      <td className="px-4 py-4 whitespace-nowrap bg-inherit">
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={isOnline ? () => handleEdit(breaker) : undefined}
@@ -915,7 +1123,7 @@ function ViewByBreakers() {
         </div>
       )}
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirmation Dialog */}
       <ConfirmDialog
         isOpen={confirmDelete.show}
         onClose={() => setConfirmDelete({ show: false, id: null, name: '' })}
@@ -924,6 +1132,18 @@ function ViewByBreakers() {
         message={`Are you sure you want to delete breaker "${confirmDelete.name}"? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
+      />
+
+      {/* Batch Confirmation Dialog */}
+      <BatchConfirmDialog
+        show={batchConfirm.show}
+        onConfirm={batchConfirm.onConfirm}
+        onCancel={() => setBatchConfirm({ ...batchConfirm, show: false })}
+        title={batchConfirm.title}
+        message={batchConfirm.message}
+        type={batchConfirm.type}
+        confirmText="Confirmer"
+        cancelText="Annuler"
       />
 
       {/* Footer */}

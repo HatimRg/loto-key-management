@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Linkedin, Mail, FileText, Upload, Save, Edit2, X, Download, Eye, RefreshCw } from 'lucide-react';
+import { User, Linkedin, Mail, FileText, Upload, Save, Edit2, X, Download, Eye } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { APP_CONFIG, FILE_CONFIG } from '../utils/constants';
@@ -40,7 +40,6 @@ function AboutMe() {
   const [newCVName, setNewCVName] = useState('');
   const [showPDFViewer, setShowPDFViewer] = useState(false);
   const [viewingCV, setViewingCV] = useState(null);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     loadProfileData();
@@ -51,12 +50,10 @@ function AboutMe() {
     try {
       if (ipcRenderer) {
         const result = await db.getAppSettings();
-        console.log('App settings query result:', result);
         
         if (result && result.data && result.data.length > 0) {
           const settings = result.data[0];
           setAppSettings(settings);
-          console.log('✅ App settings loaded from database:', settings);
         } else {
           console.warn('⚠️ No app settings found in database, using defaults');
         }
@@ -71,7 +68,6 @@ function AboutMe() {
     try {
       if (ipcRenderer) {
         // Use cloud-first database method
-        console.log('💾 Saving app settings to database:', settings);
         const result = await db.updateAppSettings({
           id: 1,  // Single row table
           app_name: settings.app_name,
@@ -85,7 +81,6 @@ function AboutMe() {
           support_phone: settings.support_phone || null,
           updated_at: new Date().toISOString()
         });
-        console.log('✅ App settings save result:', result);
         await loadAppSettings(); // Reload to confirm
         return result.success !== false;
       }
@@ -100,7 +95,6 @@ function AboutMe() {
     try {
       if (ipcRenderer) {
         const result = await db.getProfileSettings();
-        console.log('Profile query result:', result);
         
         if (result && result.data && result.data.length > 0) {
           const data = result.data[0];
@@ -123,7 +117,6 @@ function AboutMe() {
               const imageResult = await ipcRenderer.invoke('load-image', data.profilePicture);
               if (imageResult.success) {
                 data.profilePicture = imageResult.dataURL;
-                console.log('✅ Profile picture loaded from disk');
               } else {
                 console.error('Failed to load profile picture:', imageResult.error);
               }
@@ -131,10 +124,6 @@ function AboutMe() {
               console.error('Error loading profile picture:', error);
             }
           }
-          
-          console.log('Loaded profile data:', data);
-          console.log('Profile picture:', data.profilePicture ? 'Loaded' : 'None');
-          console.log('CV files:', data.cvFiles);
           
           setProfileData(data);
         } else {
@@ -152,7 +141,6 @@ function AboutMe() {
     try {
       if (ipcRenderer) {
         // Use cloud-first database method
-        console.log('💾 Saving profile settings to database:', data);
         const result = await db.updateProfileSettings({
           id: 1,  // Single row table
           name: data.name,
@@ -164,7 +152,6 @@ function AboutMe() {
           cvFiles: JSON.stringify(data.cvFiles || []),  // Stringify for database
           updated_at: new Date().toISOString()
         });
-        console.log('✅ Profile settings save result:', result);
         return result.success !== false;
       }
       return false;
@@ -217,7 +204,6 @@ function AboutMe() {
         const fileData = event.target.result;
         
         // Upload to Supabase Storage ONLY
-        console.log('☁️ Uploading profile picture to Supabase Storage...');
         const fileName = `profile_${Date.now()}_${file.name}`;
         const saveResult = await saveFileDualWrite(
           fileName,
@@ -226,8 +212,6 @@ function AboutMe() {
         );
         
         if (saveResult.success) {
-          console.log('✅ Profile picture uploaded to Supabase:', saveResult.cloudUrl);
-          
           // Use cloud URL for display and storage
           setProfileData(prev => ({ ...prev, profilePicture: saveResult.cloudUrl }));
           
@@ -284,7 +268,6 @@ function AboutMe() {
         const fileData = event.target.result;
         
         // Upload to Supabase Storage ONLY
-        console.log('☁️ Uploading CV file to Supabase Storage...');
         const fileName = `cv_${Date.now()}_${file.name}`;
         const saveResult = await saveFileDualWrite(
           fileName,
@@ -293,8 +276,6 @@ function AboutMe() {
         );
 
         if (saveResult.success) {
-          console.log('✅ CV file uploaded to Supabase:', saveResult.cloudUrl);
-          
           // Store cloud URL only
           const newCVFiles = [...profileData.cvFiles, { 
             path: saveResult.cloudUrl,  // Cloud URL only
@@ -366,8 +347,6 @@ function AboutMe() {
   };
 
   const handleViewCV = async (cv) => {
-    console.log('📄 Attempting to view CV:', cv.displayName);
-    
     if (!cv.path) {
       console.error('❌ No CV path provided');
       showToast('No CV available', 'error');
@@ -377,7 +356,6 @@ function AboutMe() {
     try {
       // Check if it's a Supabase cloud URL (https://)
       if (cv.path.startsWith('http://') || cv.path.startsWith('https://')) {
-        console.log('☁️ Cloud URL detected - opening directly:', cv.path);
         setViewingCV({ url: cv.path, name: cv.displayName });
         setShowPDFViewer(true);
         return;
@@ -385,7 +363,6 @@ function AboutMe() {
       
       // Check if it's a data URL (browser mode)
       if (cv.path.startsWith('data:')) {
-        console.log('🌐 Browser mode - using data URL');
         setViewingCV({ url: cv.path, name: cv.displayName });
         setShowPDFViewer(true);
         return;
@@ -393,11 +370,8 @@ function AboutMe() {
       
       // Local file path - read via IPC (Electron)
       if (ipcRenderer) {
-        console.log('💻 Electron mode - reading file via IPC:', cv.path);
         const result = await ipcRenderer.invoke('read-file', cv.path);
-        console.log('📥 IPC result:', result?.success ? 'Success' : 'Failed');
         if (result.success) {
-          console.log('✅ File read successfully, size:', result.data?.length || 0);
           // Convert base64 to blob (browser-compatible)
           const binaryString = atob(result.data);
           const bytes = new Uint8Array(binaryString.length);
@@ -406,7 +380,6 @@ function AboutMe() {
           }
           const blob = new Blob([bytes], { type: 'application/pdf' });
           const url = URL.createObjectURL(blob);
-          console.log('✅ PDF blob created, opening viewer');
           setViewingCV({ url, name: cv.displayName });
           setShowPDFViewer(true);
         } else {
@@ -489,7 +462,7 @@ function AboutMe() {
       )}
 
       {/* Profile Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden animate-fadeInUp">
         <div className="p-8">
           {/* Profile Picture and Basic Info */}
           <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-6">
@@ -617,7 +590,8 @@ function AboutMe() {
             {profileData.cvFiles && profileData.cvFiles.length > 0 ? (
               <div className="space-y-3 mb-4">
                 {profileData.cvFiles.map((cv, index) => (
-                  <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-4 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                  <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-4 rounded-lg 
+                  hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 hover:scale-[1.02] hover:shadow-md">
                     <div className="flex items-center space-x-3 flex-1 min-w-0">
                       <FileText className="w-6 h-6 text-red-600 flex-shrink-0" />
                       <span className="text-gray-700 dark:text-gray-300 font-medium truncate">{cv.displayName}</span>
@@ -727,7 +701,7 @@ function AboutMe() {
 
       {/* System Information */}
       {isEditing && isEditor && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 animate-fadeInUp">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             System Information
           </h3>
@@ -777,7 +751,7 @@ function AboutMe() {
       )}
 
       {/* Project Info */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 animate-fadeInUp">
         {isEditing && isEditor ? (
           <>
             <input
@@ -806,53 +780,23 @@ function AboutMe() {
         )}
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{packageJson.version}</p>
+          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center hover-lift transition-all duration-300 cursor-pointer hover:border-2 hover:border-blue-400">
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 transition-transform duration-200 hover:scale-110">{packageJson.version}</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Version (Auto-synced)</p>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">React</p>
+          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center hover-lift transition-all duration-300 cursor-pointer hover:border-2 hover:border-green-400">
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400 transition-transform duration-200 hover:scale-110">React</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Framework</p>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">Electron</p>
+          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center hover-lift transition-all duration-300 cursor-pointer hover:border-2 hover:border-purple-400">
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 transition-transform duration-200 hover:scale-110">Electron</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Platform</p>
           </div>
-          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center">
-            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">SQLite</p>
+          <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg text-center hover-lift transition-all duration-300 cursor-pointer hover:border-2 hover:border-orange-400">
+            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400 transition-transform duration-200 hover:scale-110">SQLite</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">Database</p>
           </div>
         </div>
-        
-        {/* Manual Update Check Button (for testing) */}
-        {ipcRenderer && (
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <button
-              onClick={() => {
-                setCheckingUpdate(true);
-                console.log('🔍 Manual update check triggered');
-                showToast('Checking for updates...', 'info');
-                // Clear localStorage snooze if exists
-                localStorage.removeItem('update_snooze_until');
-                // Force update check via IPC
-                ipcRenderer.send('check-for-updates');
-                setTimeout(() => setCheckingUpdate(false), 3000);
-              }}
-              disabled={checkingUpdate}
-              className={`w-full py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
-                checkingUpdate
-                  ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              <RefreshCw className={`w-4 h-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
-              <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
-            </button>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Current version: {packageJson.version} • Open DevTools (F12) to see logs
-            </p>
-          </div>
-        )}
       </div>
 
       {/* PDF Viewer Modal */}

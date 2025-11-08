@@ -8,9 +8,14 @@ function Login() {
   const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Animation states
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationPhase, setAnimationPhase] = useState('idle'); // idle, slide, meet, spin, fade
+  const [pendingUserMode, setPendingUserMode] = useState(null);
 
   const handleVisitorLogin = () => {
-    login('Visitor');
+    startLoginAnimation('Visitor');
   };
 
   const handleEditorLogin = (e) => {
@@ -19,21 +24,65 @@ function Login() {
     const restrictedCode = config?.RESTRICTED_ACCESS_CODE || 'sgtm123';
     
     if (accessCode === adminCode) {
-      login('AdminEditor');
+      startLoginAnimation('AdminEditor');
     } else if (accessCode === restrictedCode) {
-      login('RestrictedEditor');
+      startLoginAnimation('RestrictedEditor');
     } else {
       setError('Incorrect access code');
       setTimeout(() => setError(''), 3000);
     }
   };
 
+  const startLoginAnimation = (userMode) => {
+    setPendingUserMode(userMode);
+    setIsAnimating(true);
+    
+    // Phase 1: Modal slides up, logo slides down (1s)
+    setAnimationPhase('slide');
+    
+    setTimeout(() => {
+      // Phase 2: They meet in the middle (0.5s transition time)
+      setAnimationPhase('meet');
+    }, 1000);
+    
+    setTimeout(() => {
+      // Phase 3: Logo enlarges and spins (1.5s)
+      setAnimationPhase('spin');
+    }, 1500);
+    
+    setTimeout(() => {
+      // Phase 4: Fade out and login (0.8s)
+      setAnimationPhase('fade');
+    }, 3000);
+    
+    setTimeout(() => {
+      // Actually perform login
+      login(userMode);
+    }, 3800);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
+    <div className={`min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center p-4 relative overflow-hidden transition-opacity duration-800 ${
+      animationPhase === 'fade' ? 'opacity-0' : 'opacity-100'
+    }`}>
+      <div className="max-w-md w-full relative">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-900 rounded-full mb-4 shadow-lg p-3">
+        <div className={`text-center mb-8 transition-all ${
+          !isAnimating ? 'animate-fadeInUp' : ''
+        } ${
+          animationPhase === 'slide' ? 'transform translate-y-[50vh] transition-transform duration-1000 ease-out' : ''
+        } ${
+          animationPhase === 'meet' ? 'transform translate-y-[30vh] transition-transform duration-500 ease-in-out' : ''
+        } ${
+          animationPhase === 'spin' ? 'transform translate-y-[30vh] transition-transform duration-1000 ease-in-out' : ''
+        }`}>
+          <div className={`inline-flex items-center justify-center bg-gray-900 rounded-full mb-4 shadow-lg p-3 transition-all ${
+            animationPhase === 'idle' ? 'w-24 h-24 hover:scale-110 duration-300' : ''
+          } ${
+            animationPhase === 'slide' || animationPhase === 'meet' ? 'w-24 h-24 duration-500' : ''
+          } ${
+            animationPhase === 'spin' ? 'w-48 h-48 animate-spin-slow duration-1000' : ''
+          }`}>
             <img 
               src="./company-logo.png"
               alt="SGTM Logo" 
@@ -45,20 +94,40 @@ function Login() {
             />
             <Lock className="w-10 h-10 text-white" style={{ display: 'none' }} />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">LOTO KMS</h1>
-          <p className="text-blue-200">Key Management & Control</p>
-          <p className="text-sm text-blue-300 mt-1">SGTM</p>
+          <h1 className={`text-4xl font-bold text-white mb-2 transition-opacity duration-500 ${
+            !isAnimating ? 'animate-fadeIn' : ''
+          } ${
+            animationPhase === 'slide' || animationPhase === 'meet' || animationPhase === 'spin' ? 'opacity-0' : 'opacity-100'
+          }`}>LOTO KMS</h1>
+          <p className={`text-blue-200 transition-opacity duration-500 ${
+            !isAnimating ? 'animate-fadeIn stagger-1' : ''
+          } ${
+            animationPhase === 'slide' || animationPhase === 'meet' || animationPhase === 'spin' ? 'opacity-0' : 'opacity-100'
+          }`}>Key Management & Control</p>
+          <p className={`text-sm text-blue-300 mt-1 transition-opacity duration-500 ${
+            !isAnimating ? 'animate-fadeIn stagger-2' : ''
+          } ${
+            animationPhase === 'slide' || animationPhase === 'meet' || animationPhase === 'spin' ? 'opacity-0' : 'opacity-100'
+          }`}>SGTM</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-lg shadow-2xl p-8">
+        <div className={`bg-white rounded-lg shadow-2xl p-8 transition-all ${
+          !isAnimating ? 'animate-fadeInUp stagger-3 hover:shadow-3xl duration-300' : ''
+        } ${
+          animationPhase === 'slide' ? 'transform -translate-y-[40vh] scale-75 opacity-50 duration-1000 ease-out' : ''
+        } ${
+          animationPhase === 'meet' || animationPhase === 'spin' || animationPhase === 'fade' ? 'opacity-0 scale-0 duration-500' : 'opacity-100 scale-100'
+        }`}>
           {!showEditor ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Select Access Mode</h2>
               
               <button
                 onClick={() => setShowEditor(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2 shadow-md"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg 
+                transition-all duration-200 flex items-center justify-center space-x-2 shadow-md 
+                hover:scale-105 hover:shadow-lg active:scale-95"
               >
                 <Lock className="w-5 h-5" />
                 <span>Admin/Editor Mode</span>
@@ -66,7 +135,9 @@ function Login() {
 
               <button
                 onClick={handleVisitorLogin}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2 shadow-md"
+                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-lg 
+                transition-all duration-200 flex items-center justify-center space-x-2 shadow-md 
+                hover:scale-105 hover:shadow-lg active:scale-95"
               >
                 <Eye className="w-5 h-5" />
                 <span>Visitor Mode (Read-Only)</span>
@@ -116,14 +187,15 @@ function Login() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-shake">
                   {error}
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors shadow-md"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg 
+                transition-all duration-200 shadow-md hover:scale-105 hover:shadow-lg active:scale-95"
               >
                 Login as Editor
               </button>
