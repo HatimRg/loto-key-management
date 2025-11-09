@@ -18,7 +18,7 @@ try {
   } catch (err2) {
     // Ultimate fallback
     packageJson = {
-      version: '1.8.5',
+      version: '1.8.7',
       description: 'LOTO Key Management System'
     };
   }
@@ -524,10 +524,16 @@ ipcMain.on('download-update', async (event) => {
 
 ipcMain.on('install-update', () => {
   console.log('🔄 User requested update installation');
-  console.log('🔄 Quitting app and launching installer...');
-  // First parameter: isSilent = true (quit without showing dialogs)
-  // Second parameter: isForceRunAfter = true (force run app after update)
-  autoUpdater.quitAndInstall(true, true);
+  console.log('⏳ Preparing to quit and install...');
+  
+  // Keep window visible for a moment so users see the final status
+  // This prevents the "flash and disappear" issue
+  setTimeout(() => {
+    console.log('🔄 Quitting app and launching installer NOW...');
+    // First parameter: isSilent = true (quit without showing dialogs)
+    // Second parameter: isForceRunAfter = true (force run app after update)
+    autoUpdater.quitAndInstall(true, true);
+  }, 1500); // 1.5 second delay to keep window visible
 });
 
 app.whenReady().then(() => {

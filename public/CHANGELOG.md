@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.7] - 2025-01-09
+
+### 🎉 What's New
+
+**Better Visual Feedback for Long Operations**
+- ✨ Added beautiful loading overlay for Excel imports and file uploads
+- 📊 Real-time progress bar shows exactly what's happening (0-100%)
+- ⏱️ Elapsed time counter keeps you informed
+- 📝 Detailed status logs for each step of the process
+- 🎨 Smooth animations and professional appearance
+
+### 🐛 Bug Fixes
+
+**Walkthrough Improvements**
+- ✅ Fixed walkthrough showing wrong page content
+- ✅ Fixed scroll not working after completing tour
+- ✅ Blocked clicks outside walkthrough to prevent confusion
+- ✅ Smoother navigation between pages during tour
+
+**Auto-Update Experience**
+- ✅ CMD installer UI now stays visible longer (7-8 seconds)
+- ✅ Clear status messages before app restarts
+- ✅ No more confusing flash-and-disappear
+
+### 💡 User Experience
+
+**What You'll Notice:**
+- Import large Excel files with confidence - see exactly what's happening
+- No more wondering if the app is frozen during imports
+- Walkthrough tour works perfectly without breaking scroll
+- Update installation gives clear visual feedback
+
+---
+
 ## [1.8.6] - 2025-01-09 🎉 **OFFICIAL LAUNCH VERSION**
 
 ### 🎯 **Welcome to LOTO Key Management System**

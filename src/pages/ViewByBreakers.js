@@ -7,6 +7,7 @@ import Footer from '../components/Footer';
 import ConfirmDialog from '../components/ConfirmDialog';
 import QuickActionsBar from '../components/QuickActionsBar';
 import BatchConfirmDialog from '../components/BatchConfirmDialog';
+import LoadingOverlay from '../components/LoadingOverlay';
 import { useMultiRowSelection } from '../hooks/useMultiRowSelection';
 import { useDebounce } from '../hooks/useDebounce';
 import db from '../utils/database';
@@ -66,6 +67,16 @@ function ViewByBreakers() {
     message: '',
     onConfirm: () => {},
     type: 'warning',
+  });
+  
+  // State for loading overlay (Excel import progress)
+  const [loadingOverlay, setLoadingOverlay] = useState({
+    show: false,
+    title: '',
+    message: '',
+    progress: 0,
+    type: 'processing',
+    details: []
   });
   
   // Zone -> SubZone mapping
@@ -488,19 +499,43 @@ function ViewByBreakers() {
     const file = event.target.files[0];
     if (!file) return;
 
+    const details = [];
+    const addDetail = (message, type = 'info') => {
+      details.push({ message, type });
+      setLoadingOverlay(prev => ({ ...prev, details: [...details] }));
+    };
+
     try {
-      showToast('Reading Excel file...', 'info');
+      // Show loading overlay
+      setLoadingOverlay({
+        show: true,
+        title: 'Importing Excel File',
+        message: 'Reading file...',
+        progress: 5,
+        type: 'import',
+        details: []
+      });
+      addDetail(`📁 File selected: ${file.name}`, 'info');
+      addDetail(`📊 File size: ${(file.size / 1024).toFixed(2)} KB`, 'info');
+      
       const data = await parseExcelFile(file);
+      setLoadingOverlay(prev => ({ ...prev, progress: 15, message: 'Parsing data...' }));
+      addDetail(`✓ File read successfully`, 'success');
       
       if (!data || data.length === 0) {
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
         showToast('No data found in Excel file', 'error');
         return;
       }
 
+      addDetail(`📊 Found ${data.length} rows to process`, 'info');
       console.log(`📥 Processing ${data.length} rows from Excel...`);
       
       // Validate data with new advanced rules
+      setLoadingOverlay(prev => ({ ...prev, progress: 25, message: 'Validating data...', type: 'validating' }));
+      addDetail('🔍 Validating breaker data...', 'info');
       const validation = validateBreakerExcel(data);
+      addDetail(`✓ Validation complete`, 'success');
       
       if (validation.errors.length > 0) {
         console.warn('⚠️  Validation warnings:', validation.errors.slice(0, 10));
@@ -512,20 +547,40 @@ function ViewByBreakers() {
       let skipped = 0;
 
       // Get existing breakers for deduplication
+      setLoadingOverlay(prev => ({ ...prev, progress: 30, message: 'Checking for duplicates...' }));
+      addDetail('🔄 Loading existing breakers...', 'info');
       const existingBreakers = (await db.getBreakers()).data || [];
       const existingKeys = new Set(
         existingBreakers.map(b => `${b.name}|${b.zone}|${b.subzone || ''}|${b.location}`.toLowerCase())
       );
+      addDetail(`✓ Found ${existingBreakers.length} existing breakers`, 'success');
 
       // Process in batches to prevent timeouts on large imports
       const BATCH_SIZE = 20;
       const totalRows = validation.valid.length;
+      addDetail(`📝 ${totalRows} valid rows ready to import`, 'info');
+      
+      if (validation.invalid.length > 0) {
+        addDetail(`⚠ ${validation.invalid.length} rows have validation errors`, 'warning');
+      }
+      
+      setLoadingOverlay(prev => ({ ...prev, progress: 35, message: 'Importing breakers...', type: 'processing' }));
+      addDetail('💾 Starting import process...', 'info');
       
       for (let i = 0; i < totalRows; i++) {
         const row = validation.valid[i];
         
+        // Calculate progress (35% to 90%)
+        const importProgress = 35 + Math.floor(((i + 1) / totalRows) * 55);
+        setLoadingOverlay(prev => ({ 
+          ...prev, 
+          progress: importProgress,
+          message: `Importing breaker ${i + 1} of ${totalRows}...`
+        }));
+        
         // Show progress for large imports
         if (totalRows > 50 && i % 10 === 0) {
+          addDetail(`📊 Progress: ${i}/${totalRows} rows processed`, 'info');
           console.log(`📊 Progress: ${i}/${totalRows} rows processed...`);
         }
         
@@ -587,9 +642,17 @@ function ViewByBreakers() {
       }
       
       console.log(`📊 Final: ${imported} imported, ${skipped} skipped, ${failed} failed out of ${totalRows} total rows`);
+      
+      // Update progress
+      setLoadingOverlay(prev => ({ ...prev, progress: 90, message: 'Finalizing import...' }));
+      addDetail(`✓ Import complete: ${imported} imported`, 'success');
+      if (skipped > 0) addDetail(`⊘ ${skipped} duplicates skipped`, 'warning');
+      if (failed > 0) addDetail(`✗ ${failed} rows failed`, 'error');
 
       // Export failed rows if any
       if (validation.failedRows && validation.failedRows.length > 0) {
+        setLoadingOverlay(prev => ({ ...prev, progress: 95, message: 'Exporting error report...' }));
+        addDetail('📤 Generating error report...', 'info');
         console.log(`📤 Exporting ${validation.failedRows.length} failed rows...`);
         const exported = await exportFailedRows(validation.failedRows, 'Breakers');
         if (exported) {
@@ -612,7 +675,10 @@ function ViewByBreakers() {
       }
 
       // Reload data
+      setLoadingOverlay(prev => ({ ...prev, progress: 98, message: 'Refreshing data...' }));
+      addDetail('🔄 Reloading breaker list...', 'info');
       await loadData();
+      addDetail('✓ Data refreshed successfully', 'success');
       
       // Notify other pages that breakers changed
       if (imported > 0) {
@@ -620,8 +686,16 @@ function ViewByBreakers() {
           detail: { type: 'import', count: imported } 
         }));
       }
+      
+      // Complete
+      setLoadingOverlay(prev => ({ ...prev, progress: 100, message: 'Import complete!' }));
+      setTimeout(() => {
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
+      }, 1500);
+      
     } catch (error) {
       console.error('Import error:', error);
+      setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
       showToast('Error reading Excel file: ' + error.message, 'error');
     }
 
@@ -678,6 +752,17 @@ function ViewByBreakers() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       )}
+      
+      {/* Import Progress Overlay */}
+      <LoadingOverlay
+        show={loadingOverlay.show}
+        title={loadingOverlay.title}
+        message={loadingOverlay.message}
+        progress={loadingOverlay.progress}
+        type={loadingOverlay.type}
+        details={loadingOverlay.details}
+      />
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center space-x-2">

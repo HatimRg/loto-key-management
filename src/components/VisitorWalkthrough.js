@@ -5,14 +5,27 @@ import { useLocation, useNavigate } from 'react-router-dom';
 const VisitorWalkthrough = ({ userMode, onComplete }) => {
   const [run, setRun] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Store original overflow values to restore later
+  const originalOverflow = React.useRef({
+    body: '',
+    html: '',
+    scrollBehavior: ''
+  });
 
   // Auto-start only for visitor mode, RestrictedEditor must click button in Settings
   useEffect(() => {
     if (userMode === 'Visitor' || userMode === 'visitor') {
       const hasSeenWalkthrough = localStorage.getItem('visitor_walkthrough_completed');
       if (!hasSeenWalkthrough) {
+        // Store original overflow values before starting
+        originalOverflow.current.body = document.body.style.overflow;
+        originalOverflow.current.html = document.documentElement.style.overflow;
+        originalOverflow.current.scrollBehavior = document.documentElement.style.scrollBehavior;
+        
         // Small delay to ensure page is loaded
         console.log('🎓 Auto-starting visitor walkthrough');
         setTimeout(() => setRun(true), 1000);
@@ -36,6 +49,11 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
     // Listen for manual restart from button (all modes)
     const handleRestartTour = () => {
       console.log('🔄 Walkthrough manually restarted');
+      // Store original overflow values
+      originalOverflow.current.body = document.body.style.overflow;
+      originalOverflow.current.html = document.documentElement.style.overflow;
+      originalOverflow.current.scrollBehavior = document.documentElement.style.scrollBehavior;
+      
       setStepIndex(0);
       setRun(true);
     };
@@ -60,7 +78,7 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
     { step: 35, page: '/', label: 'Final Summary' },
   ];
 
-  const getPageForStep = (step) => {
+  const getPageForStep = React.useCallback((step) => {
     // Find the navigation entry for this step (use the last one that's <= current step)
     for (let i = stepNavigation.length - 1; i >= 0; i--) {
       if (step >= stepNavigation[i].step) {
@@ -68,8 +86,126 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       }
     }
     return '/';
-  };
-
+  }, []);
+  
+  // Comprehensive scroll restoration function
+  const restoreScroll = React.useCallback(() => {
+    console.log('🔄 Restoring scroll functionality');
+    
+    // Restore body
+    document.body.style.overflow = originalOverflow.current.body || '';
+    document.body.style.position = '';
+    document.body.style.height = '';
+    document.body.style.width = '';
+    
+    // Restore html
+    document.documentElement.style.overflow = originalOverflow.current.html || '';
+    document.documentElement.style.scrollBehavior = originalOverflow.current.scrollBehavior || '';
+    
+    // Remove any Joyride-added classes or styles
+    document.body.classList.remove('joyride-active');
+    
+    // Remove injected overlay blocker style if it exists
+    const styleElement = document.getElementById('walkthrough-overlay-blocker');
+    if (styleElement) {
+      styleElement.remove();
+    }
+    
+    // Force reflow to ensure styles are applied
+    void document.body.offsetHeight;
+    
+    console.log('✅ Scroll restored');
+  }, []);
+  
+  // Ensure we're on the correct page for the current step
+  useEffect(() => {
+    if (!run || isNavigating) return;
+    
+    const requiredPage = getPageForStep(stepIndex);
+    if (requiredPage && location.pathname !== requiredPage) {
+      console.log(`🔄 Syncing to correct page: ${requiredPage} for step ${stepIndex}`);
+      setIsNavigating(true);
+      setRun(false);
+      navigate(requiredPage);
+      
+      // Resume tour after navigation
+      setTimeout(() => {
+        setIsNavigating(false);
+        setRun(true);
+      }, 500);
+    }
+  }, [stepIndex, location.pathname, run, navigate, isNavigating, getPageForStep]);
+  
+  // Restore scroll when component unmounts
+  useEffect(() => {
+    return () => {
+      restoreScroll();
+    };
+  }, [restoreScroll]);
+  
+  // Add CSS to block all clicks outside the walkthrough when active
+  useEffect(() => {
+    if (run) {
+      // Inject CSS to ensure overlay blocks all interactions
+      const style = document.createElement('style');
+      style.id = 'walkthrough-overlay-blocker';
+      style.innerHTML = `
+        .__floater__open {
+          pointer-events: auto !important;
+        }
+        .react-joyride__overlay {
+          pointer-events: all !important;
+          cursor: not-allowed;
+        }
+        .react-joyride__spotlight {
+          pointer-events: none !important;
+        }
+        .react-joyride__tooltip {
+          pointer-events: auto !important;
+          cursor: default;
+        }
+        /* Prevent interaction with elements behind the overlay */
+        body.joyride-active > *:not(.react-joyride) {
+          pointer-events: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.classList.add('joyride-active');
+      
+      // Global click blocker as extra safety
+      const blockClicks = (e) => {
+        const isJoyrideElement = e.target.closest('.react-joyride__tooltip') || 
+                                  e.target.closest('.__floater__open') ||
+                                  e.target.closest('.react-joyride__overlay');
+        
+        if (!isJoyrideElement) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          console.log('🚫 Blocked click outside walkthrough');
+          return false;
+        }
+      };
+      
+      // Capture phase to block clicks before they reach any element
+      document.addEventListener('click', blockClicks, true);
+      document.addEventListener('mousedown', blockClicks, true);
+      document.addEventListener('mouseup', blockClicks, true);
+      
+      return () => {
+        // Clean up
+        const styleElement = document.getElementById('walkthrough-overlay-blocker');
+        if (styleElement) {
+          styleElement.remove();
+        }
+        document.body.classList.remove('joyride-active');
+        document.removeEventListener('click', blockClicks, true);
+        document.removeEventListener('mousedown', blockClicks, true);
+        document.removeEventListener('mouseup', blockClicks, true);
+      };
+    }
+  }, [run]);
+  
   const handleJoyrideCallback = (data) => {
     const { status, action, index, type } = data;
 
@@ -81,14 +217,16 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       const requiredPage = getPageForStep(nextIndex);
       if (requiredPage && location.pathname !== requiredPage) {
         console.log(`🧭 Navigating to ${requiredPage} for step ${nextIndex}`);
+        setIsNavigating(true);
         setRun(false); // Pause tour during navigation
         navigate(requiredPage);
         
         // Resume tour after navigation with small delay
         setTimeout(() => {
           setStepIndex(nextIndex);
+          setIsNavigating(false);
           setRun(true);
-        }, 800); // 800ms delay for page to load
+        }, 600); // 600ms delay for page to load
       } else {
         setStepIndex(nextIndex);
       }
@@ -100,12 +238,12 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       setStepIndex(0);
       localStorage.setItem('visitor_walkthrough_completed', 'true');
       
-      // Restore scroll functionality
-      document.body.style.overflow = '';
+      // Restore scroll functionality completely
+      restoreScroll();
       
       if (onComplete) onComplete();
       // Navigate back to dashboard
-      navigate('/');
+      setTimeout(() => navigate('/'), 300);
     }
 
     // Handle close button
@@ -113,10 +251,10 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       setRun(false);
       setStepIndex(0);
       
-      // Restore scroll functionality
-      document.body.style.overflow = '';
+      // Restore scroll functionality completely
+      restoreScroll();
       
-      navigate('/');
+      setTimeout(() => navigate('/'), 300);
     }
   };
 
@@ -526,13 +664,36 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       continuous
       showProgress
       showSkipButton
-      disableOverlayClose
+      disableOverlayClose={true}
       disableCloseOnEsc={false}
+      disableScrolling={false}
+      disableScrollParentFix={true}
+      scrollToFirstStep={false}
+      scrollOffset={120}
+      spotlightPadding={10}
+      hideBackButton={false}
+      spotlightClicks={false}
       callback={handleJoyrideCallback}
       styles={{
         options: {
           primaryColor: '#3b82f6',
           zIndex: 10000,
+        },
+        overlay: {
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          mixBlendMode: 'normal',
+        },
+        spotlight: {
+          backgroundColor: 'transparent',
+          borderRadius: 4,
+        },
+      }}
+      floaterProps={{
+        disableAnimation: false,
+        styles: {
+          floater: {
+            filter: 'none',
+          },
         },
       }}
       locale={{

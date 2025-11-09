@@ -383,7 +383,7 @@ function UpdateNotification() {
       { delay: 5000, msg: 'Extracting update files...', type: 'info' },
       { delay: 5500, msg: 'Preparing installation...', type: 'info' },
       { delay: 6000, msg: 'Update ready to install!', type: 'success' },
-      { delay: 6500, msg: 'Application will restart in 3 seconds...', type: 'warning' },
+      { delay: 6500, msg: 'Application will restart in 5 seconds...', type: 'warning' },
     ];
 
     logs.forEach(({ delay, msg, type }) => {
@@ -413,7 +413,7 @@ function UpdateNotification() {
       clearInterval(countdownIntervalRef.current);
     }
     
-    setCountdown(3);
+    setCountdown(5);
     countdownIntervalRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -427,16 +427,27 @@ function UpdateNotification() {
               setIsDebugMode(false);
             }, 2000);
           } else {
-            addLog('Restarting application...', 'info');
+            // Show clear visual feedback before quitting
+            addLog('Preparing to restart...', 'info');
             setTimeout(() => {
-              if (ipcRenderer) {
-                ipcRenderer.send('install-update');
-              }
-            }, 500);
+              addLog('Closing all windows...', 'info');
+              setTimeout(() => {
+                addLog('Launching installer...', 'success');
+                setTimeout(() => {
+                  addLog('⚡ Quitting application NOW', 'warning');
+                  // Final delay to ensure user sees the message
+                  setTimeout(() => {
+                    if (ipcRenderer) {
+                      ipcRenderer.send('install-update');
+                    }
+                  }, 600);
+                }, 400);
+              }, 400);
+            }, 400);
           }
           return null;
         }
-        addLog(`Restarting in ${prev - 1}...`, 'warning');
+        addLog(`Application will restart in ${prev - 1} second${prev - 1 !== 1 ? 's' : ''}...`, 'warning');
         return prev - 1;
       });
     }, 1000);

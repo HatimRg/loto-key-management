@@ -1,6 +1,6 @@
 {
   "name": "loto-key-management",
-  "version": "1.8.6",
+  "version": "1.8.7",
   "description": "LOTO Key Management System - Offline + Supabase Sync",
   "main": "electron/main.js",
   "homepage": "./",
@@ -51,13 +51,15 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "LOTO Key Management",
       "installerIcon": "public/A minimalist logo fo.ico",
       "uninstallerIcon": "public/A minimalist logo fo.ico",
       "license": "LICENSE",
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "displayLanguageSelector": false
     },
     "extraResources": [
       {

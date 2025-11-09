@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.7] - 2025-01-09
+
+### 🎉 Added
+- **Loading Overlay for Long Operations**
+  - Beautiful full-screen loading indicator for Excel imports and file uploads
+  - Real-time progress bar (0-100%) with animated shimmer effect
+  - Detailed status logs showing each step of the operation
+  - Elapsed time counter
+  - Operation-specific icons (import, upload, processing, validating)
+  - Smooth animations and transitions
+  - Dark mode support
+  - Applied to ViewByBreakers Excel import (Personnel and Plans coming soon)
+
+### 🐛 Fixed
+- **Walkthrough Navigation Sync**
+  - Fixed issue where walkthrough showed steps for wrong page
+  - Added automatic page navigation synchronization
+  - Walkthrough now always stays on correct page for each step
+  - Smooth transitions between pages during tour
+
+- **Scroll Functionality Breaking After Walkthrough**
+  - Fixed scroll becoming disabled after walkthrough completion
+  - Comprehensive scroll restoration on all exit points
+  - Proper cleanup of Joyride-modified styles
+  - Force reflow to ensure styles are applied correctly
+  - No longer requires app restart
+
+- **Walkthrough Focus Issues**
+  - Added multi-layer click blocking outside walkthrough popup
+  - Users can only interact with walkthrough buttons
+  - Prevents accidental defocusing of tour
+  - 3-layer protection: Joyride config + CSS injection + Event blocking
+
+- **Auto-Update CMD UI Flash**
+  - Extended countdown from 3 to 5 seconds
+  - Added multi-stage visual feedback before quitting
+  - Electron window stays visible longer (1.5s delay)
+  - Clear status messages: "Preparing", "Closing", "Launching", "Quitting"
+  - Total feedback time: ~7-8 seconds vs previous instant disappearance
+
+### 🔧 Technical Improvements
+- Created reusable `LoadingOverlay` component for all long-running operations
+- Enhanced walkthrough with `isNavigating` state to prevent race conditions
+- Improved scroll restoration with `useRef` for original overflow values
+- Added Joyride configuration options: `disableScrolling`, `scrollOffset`, `spotlightPadding`
+- Added global event blockers for walkthrough (capture phase)
+- Extended update installer delay in electron main process
+- Added NSIS configuration improvements (`perMachine`, `displayLanguageSelector`)
+
+### 📊 Performance
+- Excel import now shows real-time progress for each batch
+- Detailed status updates every 10 rows for large files
+- Visual feedback prevents user confusion during long operations
+- Smoother app experience with clear loading states
+
+---
+
 ## [1.8.6] - 2025-01-09
 
 ### 🎯 **Complete LOTO Key Management System**
