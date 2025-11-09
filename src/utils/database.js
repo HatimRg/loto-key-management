@@ -776,11 +776,11 @@ export const db = {
     }
     
     const sql = `
-      INSERT OR REPLACE INTO profile_settings (id, name, title, bio, email, linkedin, profilePicture, cvFiles, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      INSERT OR REPLACE INTO profile_settings (id, name, title, bio, email, phone_number, linkedin, profilePicture, cvFiles, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `;
     return await this.run(sql, [
-      data.name, data.title, data.bio, data.email,
+      data.name, data.title, data.bio, data.email, data.phone_number,
       data.linkedin, data.profilePicture, data.cvFiles
     ]);
   },

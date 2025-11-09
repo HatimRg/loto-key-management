@@ -108,7 +108,7 @@ function ViewByLocks() {
     const selectedIds = getSelectedIds();
     if (selectedIds.length === 0) return;
 
-    if (!window.confirm(`Voulez-vous vraiment supprimer ${selectedIds.length} disjoncteur(s) verrouillé(s) ?`)) {
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} locked breaker(s)?`)) {
       return;
     }
 
@@ -139,8 +139,8 @@ function ViewByLocks() {
     const selectedIds = getSelectedIds();
     if (selectedIds.length === 0) return;
 
-    const stateText = newState === 'On' ? 'activer' : 'désactiver';
-    if (!window.confirm(`Voulez-vous vraiment ${stateText} ${selectedIds.length} disjoncteur(s) ?`)) {
+    const stateText = newState === 'On' ? 'turn on' : 'turn off';
+    if (!window.confirm(`Are you sure you want to ${stateText} ${selectedIds.length} breaker(s)?`)) {
       return;
     }
 
@@ -293,7 +293,7 @@ function ViewByLocks() {
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                     onContextMenu={(e) => handleRowContextMenu(e, breaker.id)}
-                    title="Double clic droit pour sélectionner"
+                    title="Double right-click to select"
                   >
                     {hasSelection && (
                       <td className="px-4 py-4">

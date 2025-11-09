@@ -336,8 +336,8 @@ const writeData = async (table, operation, data) => {
             sql = `INSERT OR REPLACE INTO lock_inventory (id, total_capacity, updated_at) VALUES (?, ?, ?)`;
             params = [data.id || 1, data.total_capacity, data.updated_at || new Date().toISOString()];
           } else if (table === 'profile_settings') {
-            sql = `INSERT OR REPLACE INTO profile_settings (id, name, title, bio, email, linkedin, profilePicture, cvFiles, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            params = [data.id || 1, data.name, data.title, data.bio, data.email, data.linkedin, data.profilePicture, JSON.stringify(data.cvFiles || []), data.updated_at || new Date().toISOString()];
+            sql = `INSERT OR REPLACE INTO profile_settings (id, name, title, bio, email, phone_number, linkedin, profilePicture, cvFiles, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            params = [data.id || 1, data.name, data.title, data.bio, data.email, data.phone_number, data.linkedin, data.profilePicture, JSON.stringify(data.cvFiles || []), data.updated_at || new Date().toISOString()];
           } else if (table === 'app_settings') {
             sql = `INSERT OR REPLACE INTO app_settings (id, app_name, app_version, company_name, company_logo, about_title, about_text, about_image, support_email, support_phone, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             params = [data.id || 1, data.app_name, data.app_version, data.company_name, data.company_logo, data.about_title, data.about_text, data.about_image, data.support_email, data.support_phone, data.updated_at || new Date().toISOString()];
@@ -362,8 +362,8 @@ const writeData = async (table, operation, data) => {
             sql = `UPDATE lock_inventory SET total_capacity=?, updated_at=? WHERE id=?`;
             params = [data.total_capacity, data.updated_at || new Date().toISOString(), data.id || 1];
           } else if (table === 'profile_settings') {
-            sql = `UPDATE profile_settings SET name=?, title=?, bio=?, email=?, linkedin=?, profilePicture=?, cvFiles=?, updated_at=? WHERE id=?`;
-            params = [data.name, data.title, data.bio, data.email, data.linkedin, data.profilePicture, JSON.stringify(data.cvFiles || []), data.updated_at || new Date().toISOString(), data.id || 1];
+            sql = `UPDATE profile_settings SET name=?, title=?, bio=?, email=?, phone_number=?, linkedin=?, profilePicture=?, cvFiles=?, updated_at=? WHERE id=?`;
+            params = [data.name, data.title, data.bio, data.email, data.phone_number, data.linkedin, data.profilePicture, JSON.stringify(data.cvFiles || []), data.updated_at || new Date().toISOString(), data.id || 1];
           } else if (table === 'app_settings') {
             sql = `UPDATE app_settings SET app_name=?, app_version=?, company_name=?, company_logo=?, about_title=?, about_text=?, about_image=?, support_email=?, support_phone=?, updated_at=? WHERE id=?`;
             params = [data.app_name, data.app_version, data.company_name, data.company_logo, data.about_title, data.about_text, data.about_image, data.support_email, data.support_phone, data.updated_at || new Date().toISOString(), data.id || 1];

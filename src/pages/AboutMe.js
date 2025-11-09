@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Linkedin, Mail, FileText, Upload, Save, Edit2, X, Download, Eye } from 'lucide-react';
+import { User, Linkedin, Mail, Phone, FileText, Upload, Save, Edit2, X, Download, Eye } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { APP_CONFIG, FILE_CONFIG } from '../utils/constants';
@@ -22,6 +22,7 @@ function AboutMe() {
     title: 'Full Stack Developer',
     bio: 'Developer of LOTO Key Management System - A comprehensive solution for electrical lockout/tagout procedures and key management.',
     email: APP_CONFIG.email,
+    phone_number: '',
     linkedin: APP_CONFIG.linkedIn,
     profilePicture: null,
     cvFiles: [] // Array of {path, displayName}
@@ -147,6 +148,7 @@ function AboutMe() {
           title: data.title,
           bio: data.bio,
           email: data.email,
+          phone_number: data.phone_number || null,
           linkedin: data.linkedin,
           profilePicture: data.profilePicture || null,
           cvFiles: JSON.stringify(data.cvFiles || []),  // Stringify for database
@@ -553,6 +555,29 @@ function AboutMe() {
                     >
                       <Mail className="w-5 h-5" />
                       <span>{profileData.email}</span>
+                    </a>
+                  )
+                )}
+                {isEditing && isEditor ? (
+                  <div className="flex items-center space-x-2">
+                    <Phone className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    <input
+                      type="tel"
+                      value={profileData.phone_number || ''}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, phone_number: e.target.value }))}
+                      className="px-2 py-1 bg-transparent border-b border-gray-300 dark:border-gray-600 focus:outline-none text-gray-600 dark:text-gray-300"
+                      placeholder="06 12 34 56 78"
+                      title="Formats: 06 12 34 56 78, +212 6 12 34 56 78, 0612345678, etc."
+                    />
+                  </div>
+                ) : (
+                  profileData.phone_number && (
+                    <a
+                      href={`tel:${profileData.phone_number.replace(/[^0-9+]/g, '')}`}
+                      className="flex items-center space-x-2 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+                    >
+                      <Phone className="w-5 h-5" />
+                      <span>{profileData.phone_number}</span>
                     </a>
                   )
                 )}

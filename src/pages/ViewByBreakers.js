@@ -329,8 +329,8 @@ function ViewByBreakers() {
     // Show custom confirmation dialog
     setBatchConfirm({
       show: true,
-      title: 'Confirmer la suppression',
-      message: `Voulez-vous vraiment supprimer ${selectedIds.length} disjoncteur(s) ? Cette action est irréversible.`,
+      title: 'Confirm Deletion',
+      message: `Are you sure you want to delete ${selectedIds.length} breaker(s)? This action cannot be undone.`,
       type: 'danger',
       onConfirm: async () => {
         setBatchConfirm({ ...batchConfirm, show: false });
@@ -852,7 +852,7 @@ function ViewByBreakers() {
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                     onContextMenu={(e) => handleRowContextMenu(e, breaker.id)}
-                    title="Double clic droit pour sélectionner"
+                    title="Double right-click to select"
                   >
                     {/* Checkbox - only visible when selection mode is active */}
                     {hasSelection && (
@@ -862,7 +862,7 @@ function ViewByBreakers() {
                           checked={isRowSelected(breaker.id)}
                           onChange={() => toggleRow(breaker.id)}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                          title="Sélectionner/Désélectionner"
+                          title="Select/Deselect"
                         />
                       </td>
                     )}
@@ -1142,8 +1142,8 @@ function ViewByBreakers() {
         title={batchConfirm.title}
         message={batchConfirm.message}
         type={batchConfirm.type}
-        confirmText="Confirmer"
-        cancelText="Annuler"
+        confirmText="Confirm"
+        cancelText="Cancel"
       />
 
       {/* Footer */}

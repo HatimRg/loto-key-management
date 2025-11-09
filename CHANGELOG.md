@@ -7,6 +7,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.6] - 2025-01-09
+
+### 🎯 **Complete LOTO Key Management System**
+
+**LOTO Key Management System (KMS)** is a comprehensive desktop application designed for managing electrical lockout/tagout (LOTO) procedures, circuit breaker inventory, lock key management, personnel tracking, and electrical documentation. Built with React, Electron, and Supabase for seamless offline/online operation.
+
+---
+
+### 📋 **Core Features**
+
+#### **🔌 Breaker Management**
+- Complete CRUD operations for circuit breakers
+- Track breaker details: Name, Zone, Subzone, Location, State (On/Off/Closed)
+- Lock/unlock breakers with key assignment
+- Assign breakers to personnel with remarks
+- Filter by zone, location, and state
+- Batch operations: Select multiple breakers, bulk delete, bulk state changes
+- Excel import/export for bulk operations
+- Real-time search and filtering
+- Visual state indicators with color coding
+
+#### **🔑 Lock Inventory & Storage Management**
+- Track total lock capacity and availability
+- View all locked breakers organized by zone and subzone
+- Monitor lock usage: Available vs In Use
+- Key number tracking with personnel assignment
+- Zone-based organization for easy location
+- Set total storage capacity for locks
+- Real-time usage statistics and analytics
+
+#### **👥 Personnel Management**
+- Employee records with complete details
+- Fields: Name, Last Name, ID Card, Company, Habilitation level
+- Upload and view personnel certificates (PDF, up to 5MB)
+- Integrated PDF viewer for quick certificate access
+- Track breaker assignments per person
+- Excel import/export for personnel data
+- Search and filter capabilities
+- Batch selection and deletion
+
+#### **📄 Electrical Plans**
+- Upload electrical PDF plans (up to 15MB)
+- View plans directly in the app with fullscreen PDF viewer
+- Version tracking for plan updates
+- Download plans for offline use
+- Organize by filename and upload date
+- Delete outdated plans
+- Cloud storage with local caching
+
+#### **📊 Dashboard & Analytics**
+- Real-time statistics overview
+- Breaker count by state (On/Off/Closed)
+- Lock availability metrics
+- Personnel count
+- Electrical plans inventory
+- Quick navigation to all modules
+- Visual cards with color-coded indicators
+
+#### **⚙️ Settings & Configuration**
+- **User Modes**:
+  - **Visitor**: Read-only access to all data
+  - **Restricted Editor**: Can edit but not delete
+  - **Admin Editor**: Full access including deletion and system settings
+- **Security**: PIN protection for mode changes
+- **Update Control**: Admin can push update notifications to all users
+- **Manual Update Check**: Check for new versions on demand
+- **Activity Logs**: View system history and user actions
+- **Maintenance Tools**: Database export, clear data options
+- **Walkthrough Guide**: Interactive tour for new users
+- **Theme Support**: Light/Dark mode with automatic system detection
+
+#### **👨‍💻 About Me Page**
+- Developer profile with photo upload
+- Editable name, title, and bio
+- Contact information: Email, Phone, LinkedIn
+- Phone number with Moroccan format support
+- CV upload and viewing (multiple CVs, up to 10MB each)
+- Download CVs
+- Company information and system details
+
+---
+
+### 🆕 **What's New in 1.8.6**
+
+#### 🎉 Added
+- **Phone Number Field in About Me**
+  - Added phone number field next to email in developer profile
+  - Fully editable in Admin mode
+  - Displays as clickable tel: link in view mode
+  - Supports various Moroccan phone number formats:
+    - With spaces: `06 12 34 56 78`
+    - Without spaces: `0612345678`
+    - International: `+212 6 12 34 56 78`
+    - With dashes: `06-12-34-56-78`
+    - With dots: `06.12.34.56.78`
+  - Phone icon from Lucide React
+  - Synced with cloud database (Supabase)
+
+---
+
+### 🔧 **Technical Stack**
+
+#### **Frontend**
+- React 18 with modern hooks
+- TailwindCSS for responsive design
+- Lucide React for beautiful icons
+- React Router for navigation
+- React Joyride for interactive walkthroughs
+
+#### **Backend & Storage**
+- Electron for desktop application
+- SQLite for local database (offline support)
+- Supabase for cloud sync and real-time updates
+- Hybrid database architecture (cloud-first with offline fallback)
+- 8 Supabase tables with automatic synchronization
+- 8 storage buckets for files (profile pictures, CVs, PDFs, electrical plans)
+
+#### **Data Management**
+- Dual-write system: Local SQLite + Cloud Supabase
+- Automatic sync when online
+- Full offline functionality
+- Excel import/export (XLSX format)
+- CSV export for all data tables
+- Data validation and error handling
+
+#### **Updates & Distribution**
+- Auto-update system via GitHub Releases
+- Manual update check option
+- Admin-controlled update notifications
+- Changelog viewer with "What's New" display
+- NSIS installer for Windows
+- One-click installation with desktop shortcuts
+
+---
+
+### 🌟 **Key Capabilities**
+
+✅ **Offline-First Design**: Work without internet, sync when online  
+✅ **Multi-User Modes**: Visitor, Restricted Editor, Admin Editor  
+✅ **Batch Operations**: Select and modify multiple items at once  
+✅ **Import/Export**: Excel and CSV support for bulk data operations  
+✅ **PDF Management**: View, upload, and download PDFs in-app  
+✅ **Cloud Sync**: Automatic synchronization with Supabase  
+✅ **Search & Filter**: Fast search across all modules  
+✅ **Responsive UI**: Works on different screen sizes  
+✅ **Dark Mode**: Full dark theme support  
+✅ **Auto-Updates**: Seamless updates via GitHub  
+✅ **Data Security**: PIN-protected admin functions  
+✅ **Activity Tracking**: Complete history logs  
+
+---
+
+### 📦 **Database Schema**
+
+- `breakers` - Circuit breaker inventory
+- `locks` - Lock key management
+- `personnel` - Employee records
+- `plans` - Electrical plan metadata
+- `history` - Activity and change logs
+- `lock_inventory` - Storage capacity tracking
+- `profile_settings` - Developer profile data
+- `app_settings` - Application configuration
+
+---
+
+### 🔧 **Technical Improvements in 1.8.6**
+- Added `phone_number` column to `profile_settings` table in both SQLite and Supabase
+- Updated database migration scripts for phone number field
+- Enhanced profile save functionality to include phone number
+- Updated hybrid database to sync phone number with cloud
+- Improved data validation for international phone formats
+
+---
+
 ## [1.7.4] - 2025-01-08
 
 ### ✨ Features

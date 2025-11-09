@@ -23,7 +23,7 @@ const QuickActionsBar = ({
       {/* Left side - Selection controls */}
       <div className="flex items-center space-x-2">
         <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-          {selectionCount} {selectionCount === 1 ? 'ligne sélectionnée' : 'lignes sélectionnées'}
+          {selectionCount} {selectionCount === 1 ? 'row selected' : 'rows selected'}
         </span>
         
         <div className="h-6 w-px bg-blue-300 dark:bg-blue-700 mx-2" />
@@ -31,25 +31,25 @@ const QuickActionsBar = ({
         <button
           onClick={onSelectAll}
           className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
-          title="Tout sélectionner"
+          title="Select all"
         >
           <CheckSquare className="w-4 h-4" />
-          <span>Tout sélectionner ({totalRows})</span>
+          <span>Select All ({totalRows})</span>
         </button>
         
         <button
           onClick={onClearSelection}
           className="flex items-center space-x-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm font-medium transition-colors"
-          title="Annuler la sélection"
+          title="Clear selection"
         >
           <Square className="w-4 h-4" />
-          <span>Désélectionner</span>
+          <span>Deselect</span>
         </button>
         
         <button
           onClick={onClearSelection}
           className="flex items-center space-x-1 px-2 py-1.5 bg-gray-400 hover:bg-gray-500 text-white rounded-md text-sm font-medium transition-colors"
-          title="Fermer"
+          title="Close"
         >
           <X className="w-4 h-4" />
         </button>
@@ -67,10 +67,10 @@ const QuickActionsBar = ({
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700 text-white'
               }`}
-              title={isDisabled ? 'Non disponible en mode Visiteur' : 'Activer les disjoncteurs sélectionnés'}
+              title={isDisabled ? 'Not available in Visitor mode' : 'Activate selected breakers'}
             >
               <Power className="w-4 h-4" />
-              <span>Activer ({selectionCount})</span>
+              <span>Turn On ({selectionCount})</span>
             </button>
             
             <button
@@ -81,10 +81,10 @@ const QuickActionsBar = ({
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-orange-600 hover:bg-orange-700 text-white'
               }`}
-              title={isDisabled ? 'Non disponible en mode Visiteur' : 'Désactiver les disjoncteurs sélectionnés'}
+              title={isDisabled ? 'Not available in Visitor mode' : 'Deactivate selected breakers'}
             >
               <PowerOff className="w-4 h-4" />
-              <span>Désactiver ({selectionCount})</span>
+              <span>Turn Off ({selectionCount})</span>
             </button>
           </>
         )}
@@ -97,10 +97,10 @@ const QuickActionsBar = ({
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-red-600 hover:bg-red-700 text-white'
           }`}
-          title={isDisabled ? 'Non disponible en mode Visiteur' : 'Supprimer les éléments sélectionnés'}
+          title={isDisabled ? 'Not available in Visitor mode' : 'Delete selected items'}
         >
           <Trash2 className="w-4 h-4" />
-          <span>Supprimer ({selectionCount})</span>
+          <span>Delete ({selectionCount})</span>
         </button>
       </div>
     </div>

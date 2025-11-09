@@ -496,7 +496,7 @@ function Personnel() {
     const selectedIds = getSelectedIds();
     if (selectedIds.length === 0) return;
 
-    if (!window.confirm(`Voulez-vous vraiment supprimer ${selectedIds.length} personne(s) ?`)) {
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} person(s)?`)) {
       return;
     }
 
@@ -684,7 +684,7 @@ function Personnel() {
                         : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                     onContextMenu={(e) => handleRowContextMenu(e, person.id)}
-                    title="Double clic droit pour sélectionner"
+                    title="Double right-click to select"
                   >
                     {hasSelection && (
                       <td className="px-4 py-4">
