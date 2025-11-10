@@ -593,10 +593,8 @@ function UpdateNotification() {
     };
   }, []);
 
-  if (!updateInfo || !show) return null;
-
-  // CMD-style installer
-  if (showInstaller) {
+  // CMD-style installer - show even if popup is closed
+  if (showInstaller && updateInfo) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex flex-col">
         {/* Terminal Header */}
@@ -693,6 +691,9 @@ function UpdateNotification() {
       </div>
     );
   }
+
+  // Update popup - only show if user hasn't dismissed it
+  if (!show || !updateInfo) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm animate-slideInRight">

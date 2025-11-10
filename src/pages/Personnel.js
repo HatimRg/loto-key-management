@@ -809,6 +809,9 @@ function Personnel() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/6">
                     Habilitation
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                    Certificate
+                  </th>
                   {canEdit && (
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
                       Actions
@@ -852,27 +855,31 @@ function Personnel() {
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-300 break-words">
                       {person.habilitation}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap bg-inherit">
+                      <div className="flex items-center space-x-2">
+                        {person.pdf_path && (
+                          <>
+                            <button
+                              onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
+                              className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900 rounded"
+                              title="View certificate"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDownloadPDF(person.pdf_path, person.id_card)}
+                              className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900 rounded"
+                              title="Download certificate"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                     {canEdit && (
                       <td className="px-6 py-4 whitespace-nowrap bg-inherit">
                         <div className="flex items-center space-x-2">
-                          {person.pdf_path && (
-                            <>
-                              <button
-                                onClick={() => handleViewPDF(person.pdf_path, `${person.name} ${person.lastname}`)}
-                                className="p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900 rounded"
-                                title="View certificate"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadPDF(person.pdf_path, person.id_card)}
-                                className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900 rounded"
-                                title="Download certificate"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
                           <button
                             onClick={isOnline ? () => handleEdit(person) : undefined}
                             disabled={!isOnline}
@@ -893,7 +900,7 @@ function Personnel() {
                                 ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900 cursor-pointer'
                                 : 'text-gray-400 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50'
                             }`}
-                            title={isOnline ? 'Delete person' : '⚠️ App is offline - Connect to internet to edit'}
+                            title={isOnline ? 'Delete person' : '⚠️ App is offline - Connect to internet to delete'}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

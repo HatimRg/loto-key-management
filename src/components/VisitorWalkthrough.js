@@ -63,34 +63,30 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
   }, [userMode]);
 
   // Navigation mapping for walkthrough steps - SEPARATE FOR EACH MODE
-  // Visitor mode: fewer steps (no edit buttons)
+  // Visitor mode: 23 total steps (no edit buttons)
   const visitorNavigation = [
-    { step: 0, page: '/', label: 'Welcome' },
-    { step: 1, page: '/', label: 'Navigation' },
-    { step: 2, page: '/', label: 'Dashboard' },
-    { step: 3, page: '/locks', label: 'View by Locks' },      // Start locks (3-6)
-    { step: 7, page: '/breakers', label: 'View by Breakers' }, // Start breakers (7-13)
-    { step: 14, page: '/personnel', label: 'Personnel' },      // Start personnel (14-18)
-    { step: 19, page: '/storage', label: 'Storage' },          // Start storage (19-21)
-    { step: 22, page: '/plans', label: 'Electrical Plans' },   // Start plans (22-25)
-    { step: 26, page: '/settings', label: 'Settings' },        // Start settings (26-28)
-    { step: 29, page: '/about', label: 'About' },              // Start about (29-31)
-    { step: 32, page: '/', label: 'Final Summary' },           // Return home (32-33)
+    { step: 0, page: '/', label: 'Welcome' },                  // Steps 0-2: Dashboard
+    { step: 3, page: '/locks', label: 'View by Locks' },       // Steps 3-5: Locks (Navigate, Search, Export)
+    { step: 6, page: '/breakers', label: 'View by Breakers' }, // Steps 6-9: Breakers (Navigate, Search, Filter, Export)
+    { step: 10, page: '/personnel', label: 'Personnel' },      // Steps 10-12: Personnel (Navigate, Search, Export)
+    { step: 13, page: '/storage', label: 'Storage' },          // Steps 13-14: Storage (Navigate, Inventory)
+    { step: 15, page: '/plans', label: 'Electrical Plans' },   // Steps 15-16: Plans (Navigate, Overview)
+    { step: 17, page: '/settings', label: 'Settings' },        // Steps 17-18: Settings (Navigate, Overview)
+    { step: 19, page: '/about', label: 'About' },              // Steps 19-20: About (Navigate, Developer)
+    { step: 21, page: '/', label: 'Final Summary' },           // Steps 21-22: Return home & Summary
   ];
 
-  // RestrictedEditor mode: extra steps for edit buttons (+5 steps total)
+  // RestrictedEditor mode: 29 total steps (+6 edit buttons)
   const restrictedEditorNavigation = [
-    { step: 0, page: '/', label: 'Welcome' },
-    { step: 1, page: '/', label: 'Navigation' },
-    { step: 2, page: '/', label: 'Dashboard' },
-    { step: 3, page: '/locks', label: 'View by Locks' },      // Start locks (3-7, +1 for add button)
-    { step: 8, page: '/breakers', label: 'View by Breakers' }, // Start breakers (8-15, +1 for add button)
-    { step: 16, page: '/personnel', label: 'Personnel' },      // Start personnel (16-21, +1 for add button)
-    { step: 22, page: '/storage', label: 'Storage' },          // Start storage (22-25, +1 for set total button)
-    { step: 26, page: '/plans', label: 'Electrical Plans' },   // Start plans (26-30, +1 for upload button)
-    { step: 31, page: '/settings', label: 'Settings' },        // Start settings (31-33)
-    { step: 34, page: '/about', label: 'About' },              // Start about (34-36)
-    { step: 37, page: '/', label: 'Final Summary' },           // Return home (37-38)
+    { step: 0, page: '/', label: 'Welcome' },                  // Steps 0-2: Dashboard
+    { step: 3, page: '/locks', label: 'View by Locks' },       // Steps 3-6: Locks (Navigate, Search, Export, +Add)
+    { step: 7, page: '/breakers', label: 'View by Breakers' }, // Steps 7-12: Breakers (Navigate, Search, Filter, Export, +Add, +Import)
+    { step: 13, page: '/personnel', label: 'Personnel' },      // Steps 13-16: Personnel (Navigate, Search, Export, +Add)
+    { step: 17, page: '/storage', label: 'Storage' },          // Steps 17-19: Storage (Navigate, Inventory, +Set Total)
+    { step: 20, page: '/plans', label: 'Electrical Plans' },   // Steps 20-22: Plans (Navigate, Overview, +Upload)
+    { step: 23, page: '/settings', label: 'Settings' },        // Steps 23-24: Settings (Navigate, Overview)
+    { step: 25, page: '/about', label: 'About' },              // Steps 25-26: About (Navigate, Developer)
+    { step: 27, page: '/', label: 'Final Summary' },           // Steps 27-28: Return home & Summary
   ];
 
   const getPageForStep = React.useCallback((step) => {
@@ -677,8 +673,8 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
     });
 
     console.log(`📋 Generated ${steps.length} total steps for ${userMode} mode`);
-    console.log(`🎯 Expected final step: ${userMode === 'RestrictedEditor' ? '37-38' : '32-33'}`);
-    console.log(`✅ Step generation complete`);
+    console.log(`🎯 Expected: ${userMode === 'RestrictedEditor' ? '29 steps (with edit buttons)' : '23 steps (read-only)'}`);
+    console.log(`✅ Step generation complete - ${steps.length === (userMode === 'RestrictedEditor' ? 29 : 23) ? 'MATCH ✓' : 'MISMATCH ⚠️'}`);
     return steps;
   };
 

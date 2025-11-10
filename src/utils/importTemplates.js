@@ -141,7 +141,14 @@ export const generatePersonnelTemplate = async () => {
         'Last Name': 'Smith',
         'ID Card': 'ID002',
         'Company': 'Company B',
-        'Habilitation': 'B2V'
+        'Habilitation': 'B0H0V'
+      },
+      {
+        'First Name': 'Ahmed',
+        'Last Name': 'Hassan',
+        'ID Card': '',
+        'Company': 'Company C',
+        'Habilitation': 'B1B1V'
       }
     ];
     
@@ -168,7 +175,7 @@ export const generatePersonnelTemplate = async () => {
       ['Last Name', 'REQUIRED - Person\'s last name'],
       ['ID Card', 'OPTIONAL - Person\'s ID card number (can be left empty)'],
       ['Company', 'REQUIRED - Company name'],
-      ['Habilitation', 'REQUIRED - Habilitation type (e.g., B1V, B2V, H0V)'],
+      ['Habilitation', 'REQUIRED - Habilitation type (e.g., B1V, B2V, B0H0V, B1B1V)'],
       [''],
       ['VALIDATION RULES:'],
       ['✓ First Name, Last Name, Company, and Habilitation are MANDATORY'],
@@ -178,7 +185,9 @@ export const generatePersonnelTemplate = async () => {
       ['✓ Failed rows exported to separate file for review'],
       [''],
       ['COMMON HABILITATION TYPES:'],
+      ['B0H0V - Non-electrical worker with voltage awareness'],
       ['B1V - Low voltage execution'],
+      ['B1B1V - Combined B1 + B1V certification'],
       ['B2V - Low voltage work leader'],
       ['H0V - Non-electrician voltage awareness'],
       ['BC - Consignment operations'],

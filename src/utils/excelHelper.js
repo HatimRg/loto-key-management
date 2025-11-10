@@ -142,14 +142,32 @@ export const parseExcelFile = (file) => {
         
         console.log(`📥 Initial parse: ${jsonData.length} rows (after skipping blank rows)`);
         
+        // Normalize column names (trim whitespace and handle case variations)
+        const normalizedData = jsonData.map((row, idx) => {
+          const normalizedRow = {};
+          Object.keys(row).forEach(key => {
+            // Trim whitespace from column names
+            const normalizedKey = key.trim();
+            // Preserve the value but trim it too
+            normalizedRow[normalizedKey] = typeof row[key] === 'string' ? row[key].trim() : row[key];
+          });
+          
+          if (idx === 0) {
+            console.log(`📋 Original columns: ${Object.keys(row).join(', ')}`);
+            console.log(`📋 Normalized columns: ${Object.keys(normalizedRow).join(', ')}`);
+          }
+          
+          return normalizedRow;
+        });
+        
         // Debug: Log what columns were detected
-        if (jsonData.length > 0) {
-          const detectedColumns = Object.keys(jsonData[0]);
-          console.log(`📋 Detected columns: ${detectedColumns.join(', ')}`);
+        if (normalizedData.length > 0) {
+          const detectedColumns = Object.keys(normalizedData[0]);
+          console.log(`✅ Final columns for validation: ${detectedColumns.join(', ')}`);
         }
         
         // Filter out rows where ALL cells are empty or whitespace
-        const filteredRows = jsonData.filter((row, index) => {
+        const filteredRows = normalizedData.filter((row, index) => {
           const rowValues = Object.values(row);
           const hasContent = rowValues.some(val => 
             val !== null && val !== undefined && val.toString().trim() !== ''
@@ -183,6 +201,42 @@ export const parseExcelFile = (file) => {
 };
 
 /**
+ * Helper: Get value from row with case-insensitive column lookup
+ */
+const getColumnValue = (row, possibleNames) => {
+  // First try exact match
+  for (const name of possibleNames) {
+    if (row.hasOwnProperty(name)) {
+      const value = row[name];
+      // Check if value exists and is not just whitespace
+      if (value !== null && value !== undefined && value !== '') {
+        const stringValue = String(value).trim();
+        if (stringValue !== '') {
+          return stringValue;
+        }
+      }
+    }
+  }
+  
+  // Then try case-insensitive match
+  const rowKeys = Object.keys(row);
+  for (const possibleName of possibleNames) {
+    const matchingKey = rowKeys.find(key => key.toLowerCase().trim() === possibleName.toLowerCase().trim());
+    if (matchingKey) {
+      const value = row[matchingKey];
+      if (value !== null && value !== undefined && value !== '') {
+        const stringValue = String(value).trim();
+        if (stringValue !== '') {
+          return stringValue;
+        }
+      }
+    }
+  }
+  
+  return '';
+};
+
+/**
  * Validate breaker data from Excel import with advanced rules
  * @param {Array} data - Array of breaker objects
  * @returns {Object} - Validation result with valid, invalid arrays and failed rows for export
@@ -207,18 +261,26 @@ export const validateBreakerExcel = (data) => {
     // Debug: Show raw row data
     console.log(`\n📝 Row ${rowNum}:`, JSON.stringify(row, null, 2));
     
-    // Normalize column names (handle different variations)
+    // Normalize column names (handle different variations) - Using helper function
     const normalizedRow = {
-      date: row['Date'] || row['date'] || '',
-      name: (row['Breaker Name'] || row['breaker_name'] || row['name'] || '').toString().trim(),
-      zone: (row['Zone'] || row['zone'] || '').toString().trim(),
-      subzone: (row['Subzone'] || row['subzone'] || row['Subzone'] || '').toString().trim(),
-      location: (row['Location'] || row['location'] || '').toString().trim(),
-      specifique_area: (row['Specifique Area'] || row['specifique_area'] || row['specific_area'] || '').toString().trim(),
-      state: (row['State'] || row['state'] || 'Off').toString().trim(),
-      lock_key: (row['Key Number'] || row['key_number'] || row['lock_key'] || '').toString().trim(),
-      general_breaker: (row['General Breaker'] || row['general_breaker'] || '').toString().trim()
+      date: getColumnValue(row, ['Date', 'date']),
+      name: getColumnValue(row, ['Breaker Name', 'breaker_name', 'name', 'Name', 'Breaker', 'Disjoncteur']),
+      zone: getColumnValue(row, ['Zone', 'zone']),
+      subzone: getColumnValue(row, ['Subzone', 'subzone', 'Sub-zone', 'Sub zone', 'Sous-zone']),
+      location: getColumnValue(row, ['Location', 'location', 'Emplacement', 'Site']),
+      specifique_area: getColumnValue(row, ['Specifique Area', 'specifique_area', 'specific_area', 'Specific Area', 'Area']),
+      state: getColumnValue(row, ['State', 'state', 'Status', 'status', 'État', 'etat']) || 'Off',
+      lock_key: getColumnValue(row, ['Key Number', 'key_number', 'lock_key', 'Lock Key', 'Key', 'Clé']),
+      general_breaker: getColumnValue(row, ['General Breaker', 'general_breaker', 'General', 'Parent'])
     };
+    
+    console.log(`   📋 Extracted values:`, {
+      name: normalizedRow.name || '(empty)',
+      zone: normalizedRow.zone || '(empty)',
+      subzone: normalizedRow.subzone || '(empty)',
+      location: normalizedRow.location || '(empty)',
+      state: normalizedRow.state
+    });
     
     // VALIDATION RULE 1: Check mandatory fields
     if (!normalizedRow.name) problems.push('Missing Breaker Name');
@@ -326,14 +388,22 @@ export const validatePersonnelExcel = (data) => {
     // Debug: Show raw row data
     console.log(`\n📝 Row ${rowNum}:`, JSON.stringify(row, null, 2));
     
-    // Normalize column names (handle different variations)
+    // Normalize column names (handle different variations) - Using helper function
     const normalizedRow = {
-      name: (row['First Name'] || row['first_name'] || row['name'] || row['Name'] || '').toString().trim(),
-      lastname: (row['Last Name'] || row['last_name'] || row['lastname'] || row['Lastname'] || '').toString().trim(),
-      id_card: (row['ID Card'] || row['id_card'] || row['ID'] || '').toString().trim(),
-      company: (row['Company'] || row['company'] || '').toString().trim(),
-      habilitation: (row['Habilitation'] || row['habilitation'] || '').toString().trim()
+      name: getColumnValue(row, ['First Name', 'first_name', 'firstname', 'First name', 'name', 'Name', 'Prénom', 'prenom']),
+      lastname: getColumnValue(row, ['Last Name', 'last_name', 'lastname', 'Last name', 'Lastname', 'Nom', 'nom', 'surname']),
+      id_card: getColumnValue(row, ['ID Card', 'id_card', 'ID', 'id', 'ID card', 'Matricule', 'matricule', 'Badge']),
+      company: getColumnValue(row, ['Company', 'company', 'Société', 'societe', 'Entreprise', 'entreprise', 'Organization']),
+      habilitation: getColumnValue(row, ['Habilitation', 'habilitation', 'Certification', 'certification', 'Qualification'])
     };
+    
+    console.log(`   📋 Extracted values:`, {
+      name: normalizedRow.name || '(empty)',
+      lastname: normalizedRow.lastname || '(empty)',
+      id_card: normalizedRow.id_card || '(empty)',
+      company: normalizedRow.company || '(empty)',
+      habilitation: normalizedRow.habilitation || '(empty)'
+    });
     
     // VALIDATION RULE 1: Check mandatory fields
     if (!normalizedRow.name) problems.push('Missing First Name');
@@ -341,11 +411,16 @@ export const validatePersonnelExcel = (data) => {
     if (!normalizedRow.company) problems.push('Missing Company');
     if (!normalizedRow.habilitation) problems.push('Missing Habilitation');
     
-    // VALIDATION RULE 2: Validate habilitation format (optional)
-    const validHabilitations = ['B1V', 'B2V', 'H0V', 'BC', 'BR', 'B1', 'B2', 'H0', 'BE', 'HE'];
-    if (normalizedRow.habilitation && !validHabilitations.some(h => normalizedRow.habilitation.toUpperCase().includes(h))) {
-      // Warning but don't fail
-      console.warn(`Row ${rowNum}: Unusual habilitation "${normalizedRow.habilitation}"`);
+    // VALIDATION RULE 2: Validate habilitation format (optional warning only)
+    // Common formats: B1V, B2V, H0V, BC, BR, B0H0V, B1B1V, etc.
+    const validHabilitationParts = ['B0', 'B1', 'B2', 'H0', 'BC', 'BR', 'BE', 'HE', 'V', 'B0H0V', 'B1B1V', 'B2B2V'];
+    if (normalizedRow.habilitation) {
+      const habUpper = normalizedRow.habilitation.toUpperCase();
+      const hasValidPart = validHabilitationParts.some(h => habUpper.includes(h));
+      if (!hasValidPart) {
+        // Warning only - don't fail validation
+        console.warn(`Row ${rowNum}: Unusual habilitation "${normalizedRow.habilitation}" - will still import`);
+      }
     }
     
     // If there are problems, mark as invalid
