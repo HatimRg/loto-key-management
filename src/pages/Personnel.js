@@ -41,6 +41,16 @@ function Personnel() {
   });
   const [selectedFile, setSelectedFile] = useState(null);
   
+  // State for loading overlay (Excel import and PDF upload progress)
+  const [loadingOverlay, setLoadingOverlay] = useState({
+    show: false,
+    title: '',
+    message: '',
+    progress: 0,
+    type: 'processing',
+    details: []
+  });
+  
   // Multi-row selection hook
   const {
     handleRowContextMenu,
@@ -167,18 +177,42 @@ function Personnel() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const details = [];
+    const addDetail = (message, type = 'info') => {
+      details.push({ message, type });
+      setLoadingOverlay(prev => ({ ...prev, details: [...details] }));
+    };
+
     try {
-      showToast('Processing Excel import...', 'info', 1500);
+      // Show loading overlay
+      setLoadingOverlay({
+        show: true,
+        title: 'Importing Personnel File',
+        message: 'Reading file...',
+        progress: 5,
+        type: 'import',
+        details: []
+      });
+      addDetail(`📁 File selected: ${file.name}`, 'info');
+      addDetail(`📊 File size: ${(file.size / 1024).toFixed(2)} KB`, 'info');
 
       const data = await parseExcelFile(file);
+      setLoadingOverlay(prev => ({ ...prev, progress: 15, message: 'Parsing data...' }));
+      addDetail(`✓ File read successfully`, 'success');
       
       if (!data || data.length === 0) {
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
         showToast('No data found in Excel file', 'error');
         return;
       }
 
+      addDetail(`📊 Found ${data.length} rows to process`, 'info');
+
       // Validate with new advanced rules
+      setLoadingOverlay(prev => ({ ...prev, progress: 25, message: 'Validating data...', type: 'validating' }));
+      addDetail('🔍 Validating personnel data...', 'info');
       const validation = validatePersonnelExcel(data);
+      addDetail(`✓ Validation complete`, 'success');
       
       if (validation.errors.length > 0) {
         console.warn('⚠️  Validation warnings:', validation.errors.slice(0, 10));
@@ -191,8 +225,30 @@ function Personnel() {
       // Process in batches to prevent timeouts on large imports
       const BATCH_SIZE = 20;
       const totalRows = validation.valid.length;
+      
+      setLoadingOverlay(prev => ({ ...prev, progress: 30, message: 'Checking for duplicates...' }));
+      addDetail(`📝 ${totalRows} valid rows ready to import`, 'info');
+      
+      if (validation.invalid.length > 0) {
+        addDetail(`⚠ ${validation.invalid.length} rows have validation errors`, 'warning');
+      }
+      
+      setLoadingOverlay(prev => ({ ...prev, progress: 35, message: 'Importing personnel...', type: 'processing' }));
+      addDetail('💾 Starting import process...', 'info');
 
       for (let i = 0; i < totalRows; i++) {
+        // Calculate progress (35% to 90%)
+        const importProgress = 35 + Math.floor(((i + 1) / totalRows) * 55);
+        setLoadingOverlay(prev => ({ 
+          ...prev, 
+          progress: importProgress,
+          message: `Importing person ${i + 1} of ${totalRows}...`
+        }));
+        
+        // Show progress for large imports
+        if (totalRows > 20 && i % 5 === 0) {
+          addDetail(`📊 Progress: ${i}/${totalRows} rows processed`, 'info');
+        }
         const row = validation.valid[i];
         
         const personData = {
@@ -246,8 +302,16 @@ function Personnel() {
         }
       }
       
+      // Update progress
+      setLoadingOverlay(prev => ({ ...prev, progress: 90, message: 'Finalizing import...' }));
+      addDetail(`✓ Import complete: ${imported} imported`, 'success');
+      if (skipped > 0) addDetail(`⊘ ${skipped} duplicates skipped`, 'warning');
+      if (failed > 0) addDetail(`✗ ${failed} rows failed`, 'error');
+      
       // Export failed rows if any
       if (validation.failedRows && validation.failedRows.length > 0) {
+        setLoadingOverlay(prev => ({ ...prev, progress: 95, message: 'Exporting error report...' }));
+        addDetail('📤 Generating error report...', 'info');
         const exported = await exportFailedRows(validation.failedRows, 'Personnel');
         if (exported) {
           let message = [];
@@ -264,10 +328,21 @@ function Personnel() {
       }
 
       // Reload data
+      setLoadingOverlay(prev => ({ ...prev, progress: 98, message: 'Refreshing data...' }));
+      addDetail('🔄 Reloading personnel list...', 'info');
       await loadData();
+      addDetail('✓ Data refreshed successfully', 'success');
+      
+      // Complete
+      setLoadingOverlay(prev => ({ ...prev, progress: 100, message: 'Import complete!' }));
+      setTimeout(() => {
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
+      }, 1500);
+      
     } catch (error) {
-      showToast(`Import error: ${error.message}`, 'error');
-      console.error('Import error:', error);
+      console.error('❌ Excel import error:', error);
+      setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
+      showToast('Error importing Excel file: ' + error.message, 'error');
     }
 
     event.target.value = '';
@@ -308,11 +383,32 @@ function Personnel() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    const details = [];
+    const addDetail = (message, type = 'info') => {
+      details.push({ message, type });
+      setLoadingOverlay(prev => ({ ...prev, details: [...details] }));
+    };
+    
     try {
       let pdfCloudUrl = formData.pdf_path; // Use existing cloud URL if no new file
       
       // Upload file to Supabase Storage if new one was selected
       if (selectedFile) {
+        // Show loading overlay for file upload
+        setLoadingOverlay({
+          show: true,
+          title: 'Uploading PDF Certificate',
+          message: 'Preparing file...',
+          progress: 10,
+          type: 'upload',
+          details: []
+        });
+        addDetail(`📄 File: ${selectedFile.name}`, 'info');
+        addDetail(`📊 Size: ${(selectedFile.data.length / 1024).toFixed(2)} KB`, 'info');
+        
+        setLoadingOverlay(prev => ({ ...prev, progress: 30, message: 'Uploading to cloud storage...' }));
+        addDetail('☁️ Uploading to Supabase...', 'info');
+        
         const saveResult = await saveFileDualWrite(
           `${formData.id_card}_${selectedFile.name}`,
           selectedFile.data,
@@ -321,8 +417,12 @@ function Personnel() {
         
         if (saveResult.success) {
           pdfCloudUrl = saveResult.cloudUrl;
+          setLoadingOverlay(prev => ({ ...prev, progress: 70, message: 'Upload complete!' }));
+          addDetail('✓ File uploaded successfully', 'success');
+          addDetail(`🔗 Cloud URL: ${saveResult.cloudUrl.substring(0, 50)}...`, 'info');
         } else {
           console.error('❌ Failed to upload file:', saveResult.error);
+          setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
           showToast('Failed to upload file: ' + saveResult.error, 'error');
           return;
         }
@@ -330,6 +430,12 @@ function Personnel() {
       
       // Store cloud URL in database
       const personData = { ...formData, pdf_path: pdfCloudUrl };
+      
+      // Update progress if we uploaded a file
+      if (selectedFile) {
+        setLoadingOverlay(prev => ({ ...prev, progress: 80, message: 'Saving to database...' }));
+        addDetail('💾 Saving personnel record...', 'info');
+      }
       
       if (editingPerson) {
         const result = await db.updatePersonnel(editingPerson.id, personData);
@@ -340,9 +446,13 @@ function Personnel() {
             user_mode: userMode,
             details: `ID Card: ${personData.id_card}, Company: ${personData.company}`
           });
+          if (selectedFile) {
+            addDetail('✓ Personnel record updated', 'success');
+          }
           showToast('Personnel updated successfully', 'success');
         } else {
           console.error('❌ Failed to update personnel:', result.error);
+          setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
           showToast('Failed to update personnel', 'error');
         }
       } else {
@@ -354,16 +464,36 @@ function Personnel() {
             user_mode: userMode,
             details: `ID Card: ${personData.id_card}, Company: ${personData.company}`
           });
+          if (selectedFile) {
+            addDetail('✓ Personnel record created', 'success');
+          }
           showToast('Personnel added successfully', 'success');
         } else {
           console.error('❌ Failed to add personnel:', result.error);
+          setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
           showToast('Failed to add personnel', 'error');
         }
       }
       
+      // Complete overlay if we showed it
+      if (selectedFile) {
+        setLoadingOverlay(prev => ({ ...prev, progress: 90, message: 'Refreshing data...' }));
+        addDetail('🔄 Reloading personnel list...', 'info');
+      }
+      
       await loadData();
+      
+      if (selectedFile) {
+        addDetail('✓ All done!', 'success');
+        setLoadingOverlay(prev => ({ ...prev, progress: 100, message: 'Complete!' }));
+        setTimeout(() => {
+          setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
+        }, 1000);
+      }
+      
     } catch (error) {
       console.error('❌ Submit error:', error);
+      setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
       showToast(`Error: ${error.message}`, 'error');
     } finally {
       // CRITICAL: Always close modal even on error
@@ -529,6 +659,17 @@ function Personnel() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       )}
+      
+      {/* Import/Upload Progress Overlay */}
+      <LoadingOverlay
+        show={loadingOverlay.show}
+        title={loadingOverlay.title}
+        message={loadingOverlay.message}
+        progress={loadingOverlay.progress}
+        type={loadingOverlay.type}
+        details={loadingOverlay.details}
+      />
+      
       {/* Hidden File Inputs */}
       <input
         ref={csvInputRef}

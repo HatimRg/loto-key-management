@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import Footer from '../components/Footer';
 import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingOverlay from '../components/LoadingOverlay';
 import db from '../utils/database';
 import { saveFileDualWrite } from '../utils/fileSync';
 import { FILE_CONFIG } from '../utils/constants';
@@ -22,6 +23,16 @@ function ElectricalPlans() {
   const [version, setVersion] = useState('');
   const [viewingPlan, setViewingPlan] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ show: false, id: null, name: '' });
+  
+  // State for loading overlay (PDF upload progress)
+  const [loadingOverlay, setLoadingOverlay] = useState({
+    show: false,
+    title: '',
+    message: '',
+    progress: 0,
+    type: 'processing',
+    details: []
+  });
 
   useEffect(() => {
     loadData();
@@ -89,12 +100,34 @@ function ElectricalPlans() {
       return;
     }
 
+    const details = [];
+    const addDetail = (message, type = 'info') => {
+      details.push({ message, type });
+      setLoadingOverlay(prev => ({ ...prev, details: [...details] }));
+    };
+
     try {
+      // Show loading overlay
+      setLoadingOverlay({
+        show: true,
+        title: 'Uploading Electrical Plan',
+        message: 'Preparing file...',
+        progress: 10,
+        type: 'upload',
+        details: []
+      });
+      addDetail(`📄 File: ${selectedFile.name}`, 'info');
+      addDetail(`📊 Size: ${(selectedFile.data.length / 1024).toFixed(2)} KB`, 'info');
+      if (version) addDetail(`🏷️ Version: ${version}`, 'info');
+      
       const timestamp = new Date().getTime();
       const fileName = `${timestamp}_${selectedFile.name}`;
       
       // Upload to Supabase Storage ONLY
+      setLoadingOverlay(prev => ({ ...prev, progress: 30, message: 'Uploading to cloud storage...' }));
+      addDetail('☁️ Uploading to Supabase Storage...', 'info');
       console.log('☁️ Uploading plan to Supabase Storage...');
+      
       const saveResult = await saveFileDualWrite(
         fileName,
         selectedFile.data,
@@ -103,14 +136,21 @@ function ElectricalPlans() {
       
       if (!saveResult.success) {
         console.error('❌ Failed to upload plan:', saveResult.error);
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
         showToast('Failed to upload PDF file: ' + saveResult.error, 'error');
         return;
       }
       
       const fileCloudUrl = saveResult.cloudUrl;
       console.log('✅ Plan uploaded to Supabase:', fileCloudUrl);
+      setLoadingOverlay(prev => ({ ...prev, progress: 70, message: 'Upload complete!' }));
+      addDetail('✓ File uploaded successfully', 'success');
+      addDetail(`🔗 Cloud URL: ${fileCloudUrl.substring(0, 50)}...`, 'info');
       
       // Store cloud URL in database
+      setLoadingOverlay(prev => ({ ...prev, progress: 80, message: 'Saving to database...' }));
+      addDetail('💾 Saving plan record...', 'info');
+      
       const result = await db.addPlan({
         filename: selectedFile.name,
         file_path: fileCloudUrl,  // Store cloud URL
@@ -119,22 +159,36 @@ function ElectricalPlans() {
       
       if (result.success) {
         console.log('✅ Plan added to DATABASE with cloud URL:', fileCloudUrl);
+        addDetail('✓ Plan record saved', 'success');
+        
         // Log to history
         await db.addHistory({
           action: `Uploaded electrical plan: ${selectedFile.name}`,
           user_mode: userMode,
           details: version ? `Version: ${version}` : 'No version specified'
         });
+        
+        setLoadingOverlay(prev => ({ ...prev, progress: 90, message: 'Refreshing data...' }));
+        addDetail('🔄 Reloading plans list...', 'info');
+        
         showToast('Electrical plan uploaded successfully', 'success');
         setSelectedFile(null);
         setVersion('');
         await loadData();
+        
+        addDetail('✓ All done!', 'success');
+        setLoadingOverlay(prev => ({ ...prev, progress: 100, message: 'Complete!' }));
+        setTimeout(() => {
+          setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
+        }, 1000);
       } else {
         console.error('❌ Failed to save plan to database:', result.error);
+        setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
         showToast('Failed to save plan to database', 'error');
       }
     } catch (error) {
       console.error('❌ Upload error:', error);
+      setLoadingOverlay({ show: false, title: '', message: '', progress: 0, type: 'processing', details: [] });
       showToast(`Upload error: ${error.message}`, 'error');
     } finally {
       // CRITICAL: Always close modal even on error
@@ -291,6 +345,17 @@ function ElectricalPlans() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       )}
+      
+      {/* Upload Progress Overlay */}
+      <LoadingOverlay
+        show={loadingOverlay.show}
+        title={loadingOverlay.title}
+        message={loadingOverlay.message}
+        progress={loadingOverlay.progress}
+        type={loadingOverlay.type}
+        details={loadingOverlay.details}
+      />
+      
       {/* Hidden PDF Input */}
       <input
         ref={pdfInputRef}

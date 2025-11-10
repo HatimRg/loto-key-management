@@ -62,23 +62,41 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
     return () => window.removeEventListener('restart-walkthrough', handleRestartTour);
   }, [userMode]);
 
-  // Navigation mapping for walkthrough steps
-  // This defines which page each step range should be on
-  const stepNavigation = [
+  // Navigation mapping for walkthrough steps - SEPARATE FOR EACH MODE
+  // Visitor mode: fewer steps (no edit buttons)
+  const visitorNavigation = [
     { step: 0, page: '/', label: 'Welcome' },
     { step: 1, page: '/', label: 'Navigation' },
     { step: 2, page: '/', label: 'Dashboard' },
-    { step: 3, page: '/locks', label: 'View by Locks' },
-    { step: 8, page: '/breakers', label: 'View by Breakers' },
-    { step: 15, page: '/personnel', label: 'Personnel' },
-    { step: 20, page: '/storage', label: 'Storage' },
-    { step: 23, page: '/plans', label: 'Electrical Plans' },
-    { step: 27, page: '/settings', label: 'Settings' },
-    { step: 32, page: '/about', label: 'About' },
-    { step: 35, page: '/', label: 'Final Summary' },
+    { step: 3, page: '/locks', label: 'View by Locks' },      // Start locks (3-6)
+    { step: 7, page: '/breakers', label: 'View by Breakers' }, // Start breakers (7-13)
+    { step: 14, page: '/personnel', label: 'Personnel' },      // Start personnel (14-18)
+    { step: 19, page: '/storage', label: 'Storage' },          // Start storage (19-21)
+    { step: 22, page: '/plans', label: 'Electrical Plans' },   // Start plans (22-25)
+    { step: 26, page: '/settings', label: 'Settings' },        // Start settings (26-28)
+    { step: 29, page: '/about', label: 'About' },              // Start about (29-31)
+    { step: 32, page: '/', label: 'Final Summary' },           // Return home (32-33)
+  ];
+
+  // RestrictedEditor mode: extra steps for edit buttons (+5 steps total)
+  const restrictedEditorNavigation = [
+    { step: 0, page: '/', label: 'Welcome' },
+    { step: 1, page: '/', label: 'Navigation' },
+    { step: 2, page: '/', label: 'Dashboard' },
+    { step: 3, page: '/locks', label: 'View by Locks' },      // Start locks (3-7, +1 for add button)
+    { step: 8, page: '/breakers', label: 'View by Breakers' }, // Start breakers (8-15, +1 for add button)
+    { step: 16, page: '/personnel', label: 'Personnel' },      // Start personnel (16-21, +1 for add button)
+    { step: 22, page: '/storage', label: 'Storage' },          // Start storage (22-25, +1 for set total button)
+    { step: 26, page: '/plans', label: 'Electrical Plans' },   // Start plans (26-30, +1 for upload button)
+    { step: 31, page: '/settings', label: 'Settings' },        // Start settings (31-33)
+    { step: 34, page: '/about', label: 'About' },              // Start about (34-36)
+    { step: 37, page: '/', label: 'Final Summary' },           // Return home (37-38)
   ];
 
   const getPageForStep = React.useCallback((step) => {
+    // Use correct navigation array based on mode
+    const stepNavigation = (userMode === 'RestrictedEditor') ? restrictedEditorNavigation : visitorNavigation;
+    
     // Find the navigation entry for this step (use the last one that's <= current step)
     for (let i = stepNavigation.length - 1; i >= 0; i--) {
       if (step >= stepNavigation[i].step) {
@@ -86,7 +104,7 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       }
     }
     return '/';
-  }, []);
+  }, [userMode]);
   
   // Comprehensive scroll restoration function
   const restoreScroll = React.useCallback(() => {
@@ -215,19 +233,23 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       
       // Check if we need to navigate to a different page
       const requiredPage = getPageForStep(nextIndex);
+      console.log(`📍 Step ${index} → ${nextIndex}: Required page: ${requiredPage}, Current page: ${location.pathname}, Mode: ${userMode}`);
+      
       if (requiredPage && location.pathname !== requiredPage) {
-        console.log(`🧭 Navigating to ${requiredPage} for step ${nextIndex}`);
+        console.log(`🧭 Navigation needed! Going to ${requiredPage} for step ${nextIndex}`);
         setIsNavigating(true);
         setRun(false); // Pause tour during navigation
         navigate(requiredPage);
         
         // Resume tour after navigation with small delay
         setTimeout(() => {
+          console.log(`✅ Navigation complete. Resuming tour at step ${nextIndex}`);
           setStepIndex(nextIndex);
           setIsNavigating(false);
           setRun(true);
         }, 600); // 600ms delay for page to load
       } else {
+        console.log(`✓ Already on correct page (${location.pathname}), moving to step ${nextIndex}`);
         setStepIndex(nextIndex);
       }
     }
@@ -262,7 +284,9 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
   const getSteps = () => {
     const steps = [];
     
-    console.log('🔍 Generating ALL walkthrough steps. Current page:', location.pathname, 'Mode:', userMode);
+    console.log('🔍 Generating walkthrough steps for mode:', userMode);
+    console.log('📍 Current page:', location.pathname);
+    console.log('🎯 Using navigation array:', userMode === 'RestrictedEditor' ? 'RestrictedEditor (with edit buttons)' : 'Visitor (read-only)');
 
     // STEP 0: Welcome
     steps.push({
@@ -652,7 +676,9 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       placement: 'center',
     });
 
-    console.log(`📋 Generated ${steps.length} total steps`);
+    console.log(`📋 Generated ${steps.length} total steps for ${userMode} mode`);
+    console.log(`🎯 Expected final step: ${userMode === 'RestrictedEditor' ? '37-38' : '32-33'}`);
+    console.log(`✅ Step generation complete`);
     return steps;
   };
 
@@ -668,24 +694,42 @@ const VisitorWalkthrough = ({ userMode, onComplete }) => {
       disableCloseOnEsc={false}
       disableScrolling={false}
       disableScrollParentFix={true}
-      scrollToFirstStep={false}
+      scrollToFirstStep={true}
       scrollOffset={120}
-      spotlightPadding={10}
+      spotlightPadding={15}
       hideBackButton={false}
       spotlightClicks={false}
       callback={handleJoyrideCallback}
+      debug={true}
       styles={{
         options: {
           primaryColor: '#3b82f6',
           zIndex: 10000,
+          arrowColor: '#fff',
         },
         overlay: {
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
           mixBlendMode: 'normal',
         },
         spotlight: {
-          backgroundColor: 'transparent',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          borderRadius: 8,
+          border: '2px solid #3b82f6',
+        },
+        tooltip: {
+          borderRadius: 8,
+        },
+        tooltipContainer: {
+          textAlign: 'left',
+        },
+        buttonNext: {
+          backgroundColor: '#3b82f6',
           borderRadius: 4,
+          fontSize: 14,
+        },
+        buttonBack: {
+          color: '#6b7280',
+          marginRight: 10,
         },
       }}
       floaterProps={{

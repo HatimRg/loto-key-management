@@ -121,20 +121,58 @@ export const parseExcelFile = (file) => {
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: false, cellText: true });
         
         // Get first worksheet
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // Convert to JSON
+        // Get the range of cells
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+        const totalRows = range.e.r + 1;
+        const totalCols = range.e.c + 1;
+        console.log(`📊 Excel sheet detected: ${totalRows} rows x ${totalCols} columns (range: ${worksheet['!ref']})`);
+        
+        // Convert to JSON - using column headers from first row
         const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-          raw: false,
-          defval: ''
+          raw: false,           // Get formatted values (not raw numbers/dates)
+          defval: '',          // Default value for empty cells
+          blankrows: false     // Skip completely blank rows
         });
         
-        resolve(jsonData);
+        console.log(`📥 Initial parse: ${jsonData.length} rows (after skipping blank rows)`);
+        
+        // Debug: Log what columns were detected
+        if (jsonData.length > 0) {
+          const detectedColumns = Object.keys(jsonData[0]);
+          console.log(`📋 Detected columns: ${detectedColumns.join(', ')}`);
+        }
+        
+        // Filter out rows where ALL cells are empty or whitespace
+        const filteredRows = jsonData.filter((row, index) => {
+          const rowValues = Object.values(row);
+          const hasContent = rowValues.some(val => 
+            val !== null && val !== undefined && val.toString().trim() !== ''
+          );
+          
+          if (!hasContent) {
+            console.log(`⚠️ Row ${index + 2} has all empty cells, filtering out`);
+          }
+          
+          return hasContent;
+        });
+        
+        console.log(`✓ Final result: ${filteredRows.length} rows with actual content`);
+        
+        // Log any discrepancy
+        if (filteredRows.length < totalRows - 1) {
+          const skipped = (totalRows - 1) - filteredRows.length;
+          console.log(`⚠️ WARNING: ${skipped} rows were skipped (empty or formatting issues)`);
+        }
+        
+        resolve(filteredRows);
       } catch (error) {
+        console.error('❌ Excel parsing error:', error);
         reject(error);
       }
     };
@@ -154,6 +192,8 @@ export const validateBreakerExcel = (data) => {
     return { valid: [], invalid: [], failedRows: [], errors: ['No data found in Excel file'] };
   }
   
+  console.log(`\n🔍 Starting validation of ${data.length} breaker rows...`);
+  
   const valid = [];
   const invalid = [];
   const failedRows = [];
@@ -163,6 +203,9 @@ export const validateBreakerExcel = (data) => {
   data.forEach((row, index) => {
     const rowNum = index + 2; // Account for header
     const problems = [];
+    
+    // Debug: Show raw row data
+    console.log(`\n📝 Row ${rowNum}:`, JSON.stringify(row, null, 2));
     
     // Normalize column names (handle different variations)
     const normalizedRow = {
@@ -227,6 +270,7 @@ export const validateBreakerExcel = (data) => {
     
     // If there are problems, mark as invalid
     if (problems.length > 0) {
+      console.log(`❌ Row ${rowNum} FAILED validation: ${problems.join('; ')}`);
       invalid.push({ row: rowNum, data: normalizedRow, reason: problems.join('; ') });
       errors.push(`Row ${rowNum}: ${problems.join('; ')}`);
       
@@ -245,9 +289,15 @@ export const validateBreakerExcel = (data) => {
         'Problem': problems.join('; ')
       });
     } else {
+      console.log(`✅ Row ${rowNum} PASSED validation`);
       valid.push(normalizedRow);
     }
   });
+  
+  console.log(`\n📊 Validation Summary:`);
+  console.log(`   ✅ Valid: ${valid.length} rows`);
+  console.log(`   ❌ Invalid: ${invalid.length} rows`);
+  console.log(`   📋 Total processed: ${data.length} rows`);
   
   return { valid, invalid, failedRows, errors };
 };
@@ -262,6 +312,8 @@ export const validatePersonnelExcel = (data) => {
     return { valid: [], invalid: [], failedRows: [], errors: ['No data found in Excel file'] };
   }
   
+  console.log(`\n🔍 Starting validation of ${data.length} personnel rows...`);
+  
   const valid = [];
   const invalid = [];
   const failedRows = [];
@@ -270,6 +322,9 @@ export const validatePersonnelExcel = (data) => {
   data.forEach((row, index) => {
     const rowNum = index + 2; // Account for header
     const problems = [];
+    
+    // Debug: Show raw row data
+    console.log(`\n📝 Row ${rowNum}:`, JSON.stringify(row, null, 2));
     
     // Normalize column names (handle different variations)
     const normalizedRow = {
@@ -295,6 +350,7 @@ export const validatePersonnelExcel = (data) => {
     
     // If there are problems, mark as invalid
     if (problems.length > 0) {
+      console.log(`❌ Row ${rowNum} FAILED validation: ${problems.join('; ')}`);
       invalid.push({ row: rowNum, data: normalizedRow, reason: problems.join('; ') });
       errors.push(`Row ${rowNum}: ${problems.join('; ')}`);
       
@@ -309,9 +365,15 @@ export const validatePersonnelExcel = (data) => {
         'Problem': problems.join('; ')
       });
     } else {
+      console.log(`✅ Row ${rowNum} PASSED validation`);
       valid.push(normalizedRow);
     }
   });
+  
+  console.log(`\n📊 Validation Summary:`);
+  console.log(`   ✅ Valid: ${valid.length} rows`);
+  console.log(`   ❌ Invalid: ${invalid.length} rows`);
+  console.log(`   📋 Total processed: ${data.length} rows`);
   
   return { valid, invalid, failedRows, errors };
 };
